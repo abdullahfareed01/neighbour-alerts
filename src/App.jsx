@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider }   from "./context/ThemeContext";
 import { LocationProvider } from "./context/LocationContext";
+import { AuthProvider } from "./context/AuthContext"; // Add this
 
 import Login        from "./pages/Login";
 import Register     from "./pages/Register";
@@ -13,34 +14,36 @@ export default function App() {
   return (
     <ThemeProvider>
       <LocationProvider>
-        <BrowserRouter>
-          <Routes>
-            {/* Public */}
-            <Route path="/"         element={<Login />} />
-            <Route path="/register" element={<Register />} />
+        <AuthProvider> {/* Add this wrapper */}
+          <BrowserRouter>
+            <Routes>
+              {/* Public */}
+              <Route path="/"         element={<Login />} />
+              <Route path="/register" element={<Register />} />
 
-            {/* Protected */}
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute>
-                  <UserProfile />
-                </ProtectedRoute>
-              }
-            />
+              {/* Protected */}
+              <Route
+                path="/dashboard"
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <UserProfile />
+                  </ProtectedRoute>
+                  }
+              />
 
-            {/* Fallback */}
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </BrowserRouter>
+              {/* Fallback */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </BrowserRouter>
+        </AuthProvider> {/* Close the wrapper */}
       </LocationProvider>
     </ThemeProvider>
   );

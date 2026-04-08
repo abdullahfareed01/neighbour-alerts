@@ -14,6 +14,7 @@ import {
 import LiveMap from "../components/LiveMap";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
@@ -21,6 +22,7 @@ function Login() {
   const [focusedField, setFocusedField] = useState(null);
   const [darkMode, setDarkMode] = useState(true);
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -30,6 +32,7 @@ function Login() {
     e.preventDefault();
     setLoading(true);
     setTimeout(() => {
+      login();
       setLoading(false);
       navigate("/dashboard"); // Use navigate instead of window.location.href
     }, 2000);
@@ -305,7 +308,7 @@ function Login() {
                     Don't have an account?{" "}
                     <button
                       type="button"
-                      onClick={() => (window.location.href = "/register")}
+                      onClick={() => navigate("/register")}
                       className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                     >
                       Sign up

@@ -1,38 +1,39 @@
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useContext, useState, useEffect } from "react";
 
-const AuthContext = createContext()
+const AuthContext = createContext();
 
-export function AuthProvider({ children }) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [loading, setLoading] = useState(true)
+export const AuthProvider = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedAuth = localStorage.getItem("isAuthenticated")
-    if (storedAuth === "true") {
-      setIsAuthenticated(true)
-    }
-    setLoading(false)
-  }, [])
+    // Check if user was previously logged in
+    const loggedIn = localStorage.getItem("isLoggedIn") === "true";
+    setIsAuthenticated(loggedIn);
+    setLoading(false);
+  }, []);
 
   const login = () => {
-    localStorage.setItem("isAuthenticated", "true")
-    setIsAuthenticated(true)
-  }
+    localStorage.setItem("isLoggedIn", "true");
+    setIsAuthenticated(true);
+  };
 
   const logout = () => {
-    localStorage.removeItem("isAuthenticated")
-    setIsAuthenticated(false)
-  }
+    localStorage.removeItem("isLoggedIn");
+    setIsAuthenticated(false);
+  };
 
   return (
-    <AuthContext.Provider
-      value={{ isAuthenticated, login, logout, loading }}
-    >
+    <AuthContext.Provider value={{ isAuthenticated, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
-  )
-}
+  );
+};
 
-export function useAuth() {
-  return useContext(AuthContext)
-}
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuth must be used within AuthProvider");
+  }
+  return context;
+};
