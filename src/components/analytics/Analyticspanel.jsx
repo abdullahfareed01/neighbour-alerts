@@ -98,7 +98,7 @@ function AnimatedBar({ percentage, color, delay = 0 }) {
   );
 }
 
-export default function AnalyticsPanel({
+export default function Analyticspanel({
   incidents = [],
   open,
   onClose,

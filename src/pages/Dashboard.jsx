@@ -418,7 +418,7 @@ export default function Dashboard() {
         </div>
 
         {/* Analytics Panel */}
-        <AnalyticsPanel
+        <Analyticspanel
           incidents={nearby}
           open={analyticsOpen}
           onClose={() => setAnalyticsOpen(false)}
