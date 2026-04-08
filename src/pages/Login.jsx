@@ -13,12 +13,14 @@ import {
 } from "lucide-react";
 import LiveMap from "../components/LiveMap";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
 function Login() {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
   const [darkMode, setDarkMode] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -29,10 +31,9 @@ function Login() {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      window.location.href = "/dashboard";
+      navigate("/dashboard"); // Use navigate instead of window.location.href
     }, 2000);
   };
-
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
