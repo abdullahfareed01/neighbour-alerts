@@ -17,7 +17,7 @@ export default function ThemeToggle({ className = "" }) {
         ${
           dark
             ? "text-slate-300 hover:text-yellow-400 bg-transparent border-0 outline-none ring-0 focus:ring-0 focus:outline-none"
-            : "bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700"
+            : "bg-gray-0 text-gray-500 hover:bg-gray-0 hover:text-gray-700"
         }
         ${className}
       `}
