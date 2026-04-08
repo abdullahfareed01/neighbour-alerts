@@ -48,7 +48,7 @@ import SplashScreen from "../components/ui/SplashScreen";
 import ReportSuccessAnimation from "../components/ui/ReportSuccessAnimation";
 import LocationPermissionBanner from "../components/ui/LocationPermissionBanner";
 import ThemeToggle from "../components/ui/ThemeToggle";
-import AnalyticsPanel from "../components/analytics/Analyticspanel";
+import Analyticspanel from "../components/analytics/Analyticspanel";
 
 import { useTheme } from "../context/ThemeContext";
 import { useLocation, DEFAULT_LOCATION } from "../context/LocationContext";
