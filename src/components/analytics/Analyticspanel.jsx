@@ -170,17 +170,17 @@ export default function Analyticspanel({
 
       {/* Panel */}
       <aside
-        className={`
-          fixed md:relative right-0 top-0 h-full z-[601]
-          w-[90vw] max-w-md md:w-[28%] md:min-w-[320px]
-          bg-white dark:bg-na-surface
-          border-l border-gray-200 dark:border-na-border
-          shadow-2xl md:shadow-none
-          flex flex-col
-          transition-transform duration-300 ease-out
-          ${open ? "translate-x-0" : "translate-x-full"}
-        `}
-      >
+  className={`
+    fixed inset-y-0 right-0 z-[9999]
+    w-[90vw] max-w-md md:w-[28%] md:min-w-[320px]
+    bg-white dark:bg-na-surface
+    border-l border-gray-200 dark:border-na-border
+    shadow-2xl md:shadow-none
+    flex flex-col
+    transition-transform duration-300 ease-out
+    ${open ? "translate-x-0" : "translate-x-full"}
+  `}
+>
         {/* Header */}
         <div className="shrink-0 border-b border-gray-100 dark:border-na-border p-4">
           <div className="flex items-center justify-between mb-1">

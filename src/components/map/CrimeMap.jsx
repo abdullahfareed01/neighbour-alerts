@@ -1,5 +1,3 @@
-
-
 import { useEffect, useRef, memo, useMemo, useCallback, useState } from "react";
 import {
   MapContainer,
@@ -12,28 +10,28 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { LocateFixed } from "lucide-react"; // Add this import
 
 const DEFAULT_USER_LOC = Object.freeze([24.944922, 67.038815]);
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 const RADIUS_M = 5000;
-const DEF_ZOOM = 15;
+const DEF_ZOOM = 13; // Changed from 15 to 13 for better overview
 const FIT_DUR = 1.6;
-const FIT_PAD = [120, 120]; // Increased padding for better visibility
-const FIT_MAX_Z = 16; // Slightly lower max zoom for fitBounds
-// FlyTo config
+const FIT_PAD = [120, 120];
+const FIT_MAX_Z = 16;
 const FLY_DUR = 1.8;
-const FLY_EASE = 0.25; // Lower = smoother easing (0.25 works well with Leaflet)
-const FLY_ZOOM = 17; // Safe zoom level to prevent white screen
-const MAX_SAFE_ZOOM = 18; // Absolute maximum to prevent tile loading issues
+const FLY_EASE = 0.25;
+const FLY_ZOOM = 17;
+const MAX_SAFE_ZOOM = 18;
 
 const TILES = {
   light: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  dark: "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png",
+  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", // Changed to CartoDB Dark for faster loading
 };
 const TILE_ATTR = {
   light: "© OpenStreetMap",
-  dark: "© OpenStreetMap © CARTO",
+  dark: "© OpenStreetMap © CartoDB",
 };
 
 const CIRCLE_OPT = Object.freeze({
@@ -118,6 +116,7 @@ const makeWaveIcon = (band) => {
   return _waves[band];
 };
 
+// Updated user icon - smaller and cleaner
 const USER_ICON = L.divIcon({
   className: "na-user-outer",
   html: `<div class="na-user">
@@ -125,31 +124,12 @@ const USER_ICON = L.divIcon({
     <span class="na-user-ring r2"></span>
     <div class="na-user-dot"></div>
   </div>`,
-  iconSize: [56, 56],
-  iconAnchor: [28, 28],
-  popupAnchor: [0, -32],
+  iconSize: [40, 40], // Reduced from 56
+  iconAnchor: [20, 20], // Reduced from 28
+  popupAnchor: [0, -24], // Adjusted
 });
 
-// ─── Tile warmer ──────────────────────────────────────────────────────────────
-function warmTiles(tileUrl, lat, lng, zoom) {
-  const n = Math.pow(2, zoom);
-  const x = Math.floor(((lng + 180) / 360) * n);
-  const sinLat = Math.sin((lat * Math.PI) / 180);
-  const y = Math.floor(
-    ((1 - Math.log((1 + sinLat) / (1 - sinLat)) / (2 * Math.PI)) / 2) * n,
-  );
-  for (let dx = -1; dx <= 1; dx++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      const url = tileUrl
-        .replace("{z}", zoom)
-        .replace("{x}", x + dx)
-        .replace("{y}", y + dy)
-        .replace("{s}", "a")
-        .replace("{r}", "");
-      new Image().src = url;
-    }
-  }
-}
+// ─── Tile warmer - removed as it causes loading issues ───────────────────────
 
 // ─── Canvas Heatmap Layer ─────────────────────────────────────────────────────
 function HeatmapLayer({ incidents, uLoc }) {
@@ -299,7 +279,7 @@ function AutoOpenUserPopup({ userLocation }) {
 }
 
 // ─── MapCommandController ─────────────────────────────────────────────────────
-function MapCommandController({ cmd, userLocation, tileUrl, incidents }) {
+function MapCommandController({ cmd, userLocation, incidents }) {
   const map = useMap();
   const keyRef = useRef(null);
 
@@ -311,8 +291,6 @@ function MapCommandController({ cmd, userLocation, tileUrl, incidents }) {
 
     if (cmd.type === "flyTo") {
       const tz = cmd.zoom ?? FLY_ZOOM;
-      warmTiles(tileUrl, cmd.lat, cmd.lng, tz);
-      warmTiles(tileUrl, cmd.lat, cmd.lng, tz - 1);
       map.flyTo([cmd.lat, cmd.lng], tz, {
         duration: FLY_DUR,
         easeLinearity: FLY_EASE,
@@ -322,18 +300,6 @@ function MapCommandController({ cmd, userLocation, tileUrl, incidents }) {
         lat: DEFAULT_USER_LOC[0],
         lng: DEFAULT_USER_LOC[1],
       };
-      warmTiles(
-        tileUrl,
-        (uLoc.lat + cmd.lat) / 2,
-        (uLoc.lng + cmd.lng) / 2,
-        FIT_MAX_Z,
-      );
-      warmTiles(
-        tileUrl,
-        (uLoc.lat + cmd.lat) / 2,
-        (uLoc.lng + cmd.lng) / 2,
-        FIT_MAX_Z - 1,
-      );
       map.fitBounds(
         L.latLngBounds([
           L.latLng(uLoc.lat, uLoc.lng),
@@ -348,7 +314,6 @@ function MapCommandController({ cmd, userLocation, tileUrl, incidents }) {
         },
       );
     } else if (cmd.type === "initialFit") {
-      // Initial fit: include user + all incidents + 5km circle
       const uLoc = userLocation ?? {
         lat: DEFAULT_USER_LOC[0],
         lng: DEFAULT_USER_LOC[1],
@@ -359,8 +324,7 @@ function MapCommandController({ cmd, userLocation, tileUrl, incidents }) {
         ...cmd.incidents.map((inc) => L.latLng(inc.lat, inc.lng)),
       ];
 
-      // Add circle boundary points (approximate)
-      const R_DEG = RADIUS_M / 111000; // rough km to degrees
+      const R_DEG = RADIUS_M / 111000;
       allPoints.push(
         L.latLng(uLoc.lat + R_DEG, uLoc.lng),
         L.latLng(uLoc.lat - R_DEG, uLoc.lng),
@@ -372,18 +336,23 @@ function MapCommandController({ cmd, userLocation, tileUrl, incidents }) {
 
       map.fitBounds(bounds, {
         padding: FIT_PAD,
-        maxZoom: 14, // Lower max zoom for initial overview
+        maxZoom: DEF_ZOOM, // Use DEF_ZOOM here
         animate: true,
         duration: 1.2,
       });
+    } else if (cmd.type === "resetView") {
+      // New command for reset button
+      map.setView([userLocation.lat, userLocation.lng], DEF_ZOOM, {
+        animate: true,
+        duration: 1.5,
+      });
     }
-  }, [cmd, map, userLocation, tileUrl, incidents]);
+  }, [cmd, map, userLocation, incidents]);
 
   return null;
 }
 
 // ─── PopupController ──────────────────────────────────────────────────────────
-// Enhanced popup controller with offset to prevent overflow
 function PopupController({ selectedId, markersRef }) {
   const map = useMap();
   const prevIdRef = useRef(null);
@@ -404,24 +373,20 @@ function PopupController({ selectedId, markersRef }) {
     if (!mkr) return;
     prevMkrRef.current = mkr;
 
-    // Wait for map movement to complete before opening popup
     const openPopupSafely = () => {
       try {
         const p = mkr.getPopup();
         if (p) {
           p.options.autoClose = false;
           p.options.closeOnClick = false;
-          // Add offset to prevent overflow at top
           p.options.offset = L.point(0, -10);
           mkr.openPopup();
 
-          // Pan map slightly if popup would overflow
           setTimeout(() => {
             const markerPos = mkr.getLatLng();
             const pixelPos = map.latLngToContainerPoint(markerPos);
             const mapSize = map.getSize();
 
-            // If marker is too close to top, pan down slightly
             if (pixelPos.y < 150) {
               const newCenter = map.containerPointToLatLng([
                 mapSize.x / 2,
@@ -441,36 +406,15 @@ function PopupController({ selectedId, markersRef }) {
 }
 
 // ─── RouteLine ────────────────────────────────────────────────────────────────
-// Enhanced: only draws route AFTER map movement completes
+// Fixed: Polylines stay visible during map movement
 function RouteLine({ incident, userLocation, onInfo }) {
-  const map = useMap();
-  const [drawn, setDrawn] = useState([]);
   const [coords, setCoords] = useState([]);
-  const [mapMoving, setMapMoving] = useState(false);
   const prevIdRef = useRef(null);
   const reportedRef = useRef(false);
-  const rafRef = useRef(null);
-  const timerRef = useRef(null);
   const abortRef = useRef(null);
 
-  // Track map movement
-  useEffect(() => {
-    const onMoveStart = () => setMapMoving(true);
-    const onMoveEnd = () => setMapMoving(false);
-
-    map.on("movestart zoomstart", onMoveStart);
-    map.on("moveend zoomend", onMoveEnd);
-
-    return () => {
-      map.off("movestart zoomstart", onMoveStart);
-      map.off("moveend zoomend", onMoveEnd);
-    };
-  }, [map]);
-
-  // Fetch route
   useEffect(() => {
     if (!incident) {
-      setDrawn([]);
       setCoords([]);
       prevIdRef.current = null;
       return;
@@ -508,10 +452,6 @@ function RouteLine({ incident, userLocation, onInfo }) {
             [uLat, uLng],
             [incident.lat, incident.lng],
           ]);
-          setDrawn([
-            [uLat, uLng],
-            [incident.lat, incident.lng],
-          ]);
         }
       })
       .catch((err) => {
@@ -520,67 +460,17 @@ function RouteLine({ incident, userLocation, onInfo }) {
           [uLat, uLng],
           [incident.lat, incident.lng],
         ]);
-        setDrawn([
-          [uLat, uLng],
-          [incident.lat, incident.lng],
-        ]);
       });
 
     return () => ctrl.abort();
-  }, [incident?.id, userLocation?.lat, userLocation?.lng, onInfo]); // eslint-disable-line
+  }, [incident?.id, userLocation?.lat, userLocation?.lng, onInfo]);
 
-  // Animate route drawing ONLY when map is not moving
-  useEffect(() => {
-    if (!coords.length || mapMoving) {
-      // Clear route while map is moving
-      setDrawn([]);
-      return;
-    }
-
-    if (coords.length === 2) {
-      setDrawn(coords);
-      return;
-    }
-
-    // Start animation after map settles
-    setDrawn([coords[0]]);
-    let t0 = null;
-    const DUR = 1800;
-
-    const tick = (now) => {
-      if (!t0) t0 = now;
-      const p = Math.min((now - t0) / DUR, 1);
-      const e = 1 - Math.pow(1 - p, 3);
-      const r = e * (coords.length - 1);
-      const i = Math.floor(r),
-        j = Math.min(i + 1, coords.length - 1);
-      const s = r % 1;
-      const a = coords[i],
-        b = coords[j];
-      setDrawn([
-        ...coords.slice(0, i),
-        [a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s],
-      ]);
-      if (p < 1) rafRef.current = requestAnimationFrame(tick);
-      else setDrawn(coords);
-    };
-
-    timerRef.current = setTimeout(() => {
-      rafRef.current = requestAnimationFrame(tick);
-    }, 300);
-
-    return () => {
-      clearTimeout(timerRef.current);
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, [coords, mapMoving]);
-
-  if (drawn.length < 2) return null;
+  if (coords.length < 2) return null;
 
   return (
     <>
       <Polyline
-        positions={drawn}
+        positions={coords}
         pathOptions={{
           color: "#1d4ed8",
           weight: 14,
@@ -591,7 +481,7 @@ function RouteLine({ incident, userLocation, onInfo }) {
         interactive={false}
       />
       <Polyline
-        positions={drawn}
+        positions={coords}
         pathOptions={{
           color: "#3b82f6",
           weight: 5,
@@ -602,7 +492,7 @@ function RouteLine({ incident, userLocation, onInfo }) {
         interactive={false}
       />
       <Polyline
-        positions={drawn}
+        positions={coords}
         pathOptions={{
           color: "#93c5fd",
           weight: 2,
@@ -613,6 +503,19 @@ function RouteLine({ incident, userLocation, onInfo }) {
         interactive={false}
       />
     </>
+  );
+}
+
+// ─── ResetViewButton ──────────────────────────────────────────────────────────
+function ResetViewButton({ onClick }) {
+  return (
+    <button
+      onClick={onClick}
+      className="absolute top-20 right-4 z-[999] w-10 h-10 rounded-lg bg-white dark:bg-gray-800 shadow-lg flex items-center justify-center text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-gray-700 transition-all duration-200 hover:scale-110 active:scale-95"
+      title="Reset to your location"
+    >
+      <LocateFixed className="w-5 h-5" />
+    </button>
   );
 }
 
@@ -628,6 +531,7 @@ function CrimeMap({
 }) {
   const markersRef = useRef({});
   const [routeInfo, setRouteInfo] = useState(null);
+  const [resetTrigger, setResetTrigger] = useState(0);
   const handleRouteInfo = useCallback((info) => setRouteInfo(info), []);
 
   useEffect(() => {
@@ -658,6 +562,21 @@ function CrimeMap({
   const tileUrl = dark ? TILES.dark : TILES.light;
   const tileAttr = dark ? TILE_ATTR.dark : TILE_ATTR.light;
 
+  const handleResetView = useCallback(() => {
+    setResetTrigger((prev) => prev + 1);
+  }, []);
+
+  // Create reset command
+  const activeCommand = useMemo(() => {
+    if (resetTrigger > 0) {
+      return {
+        type: "resetView",
+        triggeredAt: resetTrigger,
+      };
+    }
+    return mapCommand;
+  }, [resetTrigger, mapCommand]);
+
   return (
     <div className="h-full w-full relative">
       <MapContainer
@@ -667,7 +586,6 @@ function CrimeMap({
         minZoom={10}
         className="h-full w-full"
         key="na-crime-map"
-        keepBuffer={4}
         zoomControl
         preferCanvas={true}
       >
@@ -675,26 +593,21 @@ function CrimeMap({
           key={tileUrl}
           url={tileUrl}
           attribution={tileAttr}
-          detectRetina
-          updateWhenIdle={false}
-          updateWhenZooming={false}
-          keepBuffer={4}
+          maxNativeZoom={19}
+          maxZoom={MAX_SAFE_ZOOM}
         />
 
         <UserLayer userLocation={uLoc} />
         <AutoOpenUserPopup userLocation={uLoc} />
         <MapCommandController
-          cmd={mapCommand}
+          cmd={activeCommand}
           userLocation={uLoc}
-          tileUrl={tileUrl}
           incidents={meta}
         />
         <PopupController selectedId={selectedId} markersRef={markersRef} />
 
-        {/* Heatmap layer — only rendered when active */}
         {heatmapActive && <HeatmapLayer incidents={meta} uLoc={uLoc} />}
 
-        {/* Incident markers — hidden in heatmap mode */}
         {!heatmapActive &&
           meta.map((i) => {
             const isSel = i.id === selectedId;
@@ -772,7 +685,6 @@ function CrimeMap({
             );
           })}
 
-        {/* Route — only in marker mode and only when map is not moving */}
         {!heatmapActive && selected && (
           <RouteLine
             incident={selected}
@@ -782,7 +694,9 @@ function CrimeMap({
         )}
       </MapContainer>
 
-      {/* Heatmap mode label */}
+      {/* Reset View Button */}
+      <ResetViewButton onClick={handleResetView} />
+
       {heatmapActive && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[999] pointer-events-none">
           <div className="bg-orange-500 text-white text-xs font-bold px-4 py-1.5 rounded-full shadow-lg flex items-center gap-2">
@@ -791,7 +705,6 @@ function CrimeMap({
         </div>
       )}
 
-      {/* Route info pill */}
       {!heatmapActive && selected && routeInfo && (
         <div
           className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[999] pointer-events-none"
@@ -799,11 +712,22 @@ function CrimeMap({
             animation: "slideUp 0.35s cubic-bezier(.22,.68,0,1.2) both",
           }}
         >
-          <div className="bg-blue-600 text-white text-sm font-semibold px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-3">
-            <span>📍 {routeInfo.distance} km</span>
-            <span className="opacity-30">|</span>
-            <span>🕐 ~{routeInfo.duration} min</span>
-          </div>
+          <div
+  className="
+    bg-blue-600 text-white font-semibold
+    rounded-full shadow-2xl flex items-center
+
+    px-3 py-1.5 text-xs gap-2   /* mobile */
+    sm:px-5 sm:py-2.5 sm:text-sm sm:gap-3  /* bigger screens */
+  "
+>
+  <span>📍 {routeInfo.distance} km</span>
+
+  {/* divider hidden on very small screens */}
+  <span className="hidden xs:block opacity-30">|</span>
+
+  <span>🕐 ~{routeInfo.duration} min</span>
+</div>
         </div>
       )}
     </div>

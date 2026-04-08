@@ -338,15 +338,20 @@ function Sidebar({
   return (
     <>
       <aside
-        className={[
-          "flex flex-col bg-gray-50 dark:bg-na-navy",
-          "border-r border-gray-200 dark:border-na-border",
-          "md:relative md:w-[30%] md:h-full md:translate-x-0",
-          "fixed inset-y-0 left-0 z-[500] w-[85vw] max-w-sm",
-          "transition-transform duration-300 ease-in-out",
-          open ? "translate-x-0 shadow-2xl" : "-translate-x-full",
-        ].join(" ")}
-      >
+  className={[
+    "flex flex-col bg-gray-50 dark:bg-na-navy",
+    "border-r border-gray-200 dark:border-na-border",
+
+    // Desktop behavior
+    "md:relative md:w-[30%] md:h-full md:translate-x-0",
+
+    // Mobile overlay (FIXED + TOP LAYER)
+    "fixed inset-y-0 left-0 z-[9999] w-[85vw] max-w-sm",
+
+    "transition-transform duration-300 ease-in-out",
+    open ? "translate-x-0 shadow-2xl" : "-translate-x-full",
+  ].join(" ")}
+>
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <div className="shrink-0 bg-white dark:bg-na-surface border-b border-gray-100 dark:border-na-border">
           {/* Title row + heatmap toggle */}
