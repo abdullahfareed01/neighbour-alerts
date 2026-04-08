@@ -277,7 +277,7 @@ export default function Dashboard() {
   // ─── RENDER ────────────────────────────────────────────────────────────────
   // NO wrapper dark div — ThemeContext handles dark on <html>
   return (
-    <div className="flex flex-col h-[100dvh] overflow-hidden bg-white dark:bg-na-navygit ">
+    <div className="flex flex-col h-[100dvh] overflow-hidden  bg-white dark:bg-na-navygit ">
       {showSplash && <SplashScreen onDone={handleSplashDone} />}
       {successAnim && (
         <ReportSuccessAnimation

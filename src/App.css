@@ -11,6 +11,11 @@
    USER MARKER ANIMATIONS
    =================================== */
 
+   html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
 .user-marker-wrapper {
   background: transparent;
 }
