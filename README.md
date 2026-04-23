@@ -77,7 +77,7 @@ neighbour-alert/
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/neighbour-alert.git
+git clone https://github.com/abdullahfareed01/neighbour-alert.git
 cd neighbour-alert
 
 # Install dependencies
@@ -113,7 +113,14 @@ npm run preview
 
 ## 📸 Screenshots
 
-> *(Add screenshots of your map, analytics panel, and dark mode here)*
+<img width="1920" height="921" alt="N_Alerts" src="https://github.com/user-attachments/assets/e33b3d04-9cf6-4d1b-b54c-bcd9f882b60e" />
+<img width="1920" height="930" alt="N_Alerts1 0png" src="https://github.com/user-attachments/assets/b136161b-dbd3-4ad0-98d3-3e3e3faaed95" />
+<img width="1920" height="922" alt="N_Alerts1 1" src="https://github.com/user-attachments/assets/170f965b-f107-4891-87b9-713785a3cd4b" />
+<img width="1920" height="920" alt="N_Alerts1 3" src="https://github.com/user-attachments/assets/91fe2af4-352a-4b11-bfdf-a7adc6b09c79" />
+<img width="1920" height="925" alt="N_Alerts1 4" src="https://github.com/user-attachments/assets/47c1c5bc-09ed-426f-a4c2-ba614bc44777" />
+<img width="1920" height="925" alt="N_Alerts1 5" src="https://github.com/user-attachments/assets/b49d0830-0e8e-448f-9942-3c6015fdb225" />
+<img width="1920" height="923" alt="N_Alerts1 6" src="https://github.com/user-attachments/assets/d278b464-f805-4611-9ebc-e624b056708c" />
+
 
 ---
 
