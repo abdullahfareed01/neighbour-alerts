@@ -1,9 +1,10 @@
 # 🛡️ Neighbour Alert
 
 A community safety web application that visualizes crime incidents on an interactive map — helping residents stay informed about activity in their neighbourhood in real time.
+
 🌐 **Live Demo** → [neighbouralerts.netlify.app](https://neighbouralerts.netlify.app/dashboard)
 
-
+> ⚠️ Currently frontend-only with mock data. Backend integration is planned — see [Roadmap](#️-roadmap).
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat&logo=vite)
@@ -46,15 +47,15 @@ neighbour-alert/
 ├── public/
 ├── src/
 │   ├── components/
-│   │   ├── CrimeMap.jsx          # Main map component
-│   │   ├── Dashboard.jsx         # App dashboard shell
-│   │   ├── Sidebar.jsx           # Navigation & filter sidebar
-│   │   ├── AnalyticsPanel.jsx    # Incident stats & charts
-│   │   ├── AnimatedRouteLine.jsx # Animated polyline route display
-│   │   └── MapCommandController.jsx # Leaflet instance controller
+│   │   ├── CrimeMap.jsx               # Main map component
+│   │   ├── Dashboard.jsx              # App dashboard shell
+│   │   ├── Sidebar.jsx                # Navigation & filter sidebar
+│   │   ├── AnalyticsPanel.jsx         # Incident stats & charts
+│   │   ├── AnimatedRouteLine.jsx      # Animated polyline route display
+│   │   └── MapCommandController.jsx   # Leaflet instance controller
 │   ├── context/
-│   │   ├── ThemeContext.jsx      # Dark/light mode state
-│   │   └── LocationContext.jsx  # GPS location state
+│   │   ├── ThemeContext.jsx           # Dark/light mode state
+│   │   └── LocationContext.jsx        # GPS location state
 │   ├── App.jsx
 │   └── main.jsx
 ├── .env.example
@@ -121,6 +122,19 @@ npm run preview
 <img width="1920" height="925" alt="N_Alerts1 5" src="https://github.com/user-attachments/assets/b49d0830-0e8e-448f-9942-3c6015fdb225" />
 <img width="1920" height="923" alt="N_Alerts1 6" src="https://github.com/user-attachments/assets/d278b464-f805-4611-9ebc-e624b056708c" />
 
+---
+
+## 🗺️ Roadmap
+
+- [ ] Incident reporting form — let users submit new incidents with type, description & photo
+- [ ] Heatmap layer — density overlay using Leaflet.heat
+- [ ] Filter by incident type & date range
+- [ ] Incident severity color-coding — red / orange / yellow markers
+- [ ] Safe route mode — avoid high-crime areas when generating directions
+- [ ] Push notifications — alert when a new incident appears within 1km
+- [ ] Backend API — Node.js + database to store real incident reports
+- [ ] User authentication — verified resident accounts
+- [ ] Admin panel — approve/reject submitted incidents before they go live
 
 ---
 
