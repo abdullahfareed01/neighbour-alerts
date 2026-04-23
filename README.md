@@ -162,3 +162,11 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 - [OpenStreetMap](https://www.openstreetmap.org/) for map tiles
 - [OSRM](http://project-osrm.org/) for routing
 - [Tailwind CSS](https://tailwindcss.com/) for styling
+
+
+## 📬 Contact
+
+**Abdullah Fareed**
+- GitHub: [@abdullahfareed01](https://github.com/abdullahfareed01)
+- LinkedIn: [linkedin.com/in/abdullahfareedeng](https://www.linkedin.com/in/abdullahfareedeng)
+- Email: abdullahfareedssuet@gmail.com
