@@ -4,7 +4,7 @@ A community safety web application that visualizes crime incidents on an interac
 
 🌐 **Live Demo** → [neighbouralerts.netlify.app](https://neighbouralerts.netlify.app/dashboard)
 
-> ⚠️ Currently frontend-only with mock data. Backend integration is planned — see [Roadmap](#️-roadmap).
+> ⚠️ Currently frontend-only with mock data. Backend integration is planned, see [Roadmap](#️-roadmap).
 
 ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat&logo=vite)
