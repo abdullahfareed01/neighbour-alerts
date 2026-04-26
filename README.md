@@ -1,6 +1,6 @@
 # 🛡️ Neighbour Alert
 
-A community safety web application that visualizes crime incidents on an interactive map — helping residents stay informed about activity in their neighbourhood in real time.
+A community safety web application that visualizes crime incidents on an interactive map, helping residents stay informed about activity in their neighbourhood in real time.
 
 🌐 **Live Demo** → [neighbouralerts.netlify.app](https://neighbouralerts.netlify.app/dashboard)
 
