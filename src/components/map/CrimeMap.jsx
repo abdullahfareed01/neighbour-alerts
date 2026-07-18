@@ -10,24 +10,39 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { LocateFixed } from "lucide-react"; // Add this import
+import { LocateFixed } from "lucide-react";
+import { getRoute } from "../../services/routingService";
+import { getDistanceFromLatLonInKm } from "../../utils/haversine";
 
 const DEFAULT_USER_LOC = Object.freeze([24.944922, 67.038815]);
 
+// Routing is fixed to driving directions — the cycling/walking mode
+// switcher (and its per-mode distance/duration math that used to live in
+// services/routingService.js) has been removed. See chat notes for what
+// still needs trimming inside that file.
+const TRAVEL_MODE = "driving";
+
 // ─── Config ───────────────────────────────────────────────────────────────────
 const RADIUS_M = 5000;
-const DEF_ZOOM = 13; // Changed from 15 to 13 for better overview
+const DEF_ZOOM = 13;
+const INITIAL_FIT_ZOOM = 15;
 const FIT_DUR = 1.6;
 const FIT_PAD = [120, 120];
 const FIT_MAX_Z = 16;
 const FLY_DUR = 1.8;
-const FLY_EASE = 0.25;
+const FLY_EASE = 0.22;
 const FLY_ZOOM = 17;
 const MAX_SAFE_ZOOM = 18;
 
+// ─── Route draw-in animation tuning ────────────────────────────────────────────
+const ROUTE_ANIM_MIN_MS = 900;
+const ROUTE_ANIM_MAX_MS = 2600;
+const ROUTE_ANIM_MS_PER_KM = 350;
+const ROUTE_CAMERA_WAIT_FALLBACK_MS = FLY_DUR * 1000 + 150;
+
 const TILES = {
   light: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", // Changed to CartoDB Dark for faster loading
+  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
 };
 const TILE_ATTR = {
   light: "© OpenStreetMap",
@@ -116,7 +131,6 @@ const makeWaveIcon = (band) => {
   return _waves[band];
 };
 
-// Updated user icon - smaller and cleaner
 const USER_ICON = L.divIcon({
   className: "na-user-outer",
   html: `<div class="na-user">
@@ -124,12 +138,43 @@ const USER_ICON = L.divIcon({
     <span class="na-user-ring r2"></span>
     <div class="na-user-dot"></div>
   </div>`,
-  iconSize: [40, 40], // Reduced from 56
-  iconAnchor: [20, 20], // Reduced from 28
-  popupAnchor: [0, -24], // Adjusted
+  iconSize: [40, 40],
+  iconAnchor: [20, 20],
+  popupAnchor: [0, -24],
 });
 
-// ─── Tile warmer - removed as it causes loading issues ───────────────────────
+// ─── Route geometry helpers ─────────────────────────────────────────────────
+function buildCumulativeDistances(coords) {
+  const dists = [0];
+  for (let i = 1; i < coords.length; i++) {
+    const [lat1, lng1] = coords[i - 1];
+    const [lat2, lng2] = coords[i];
+    dists.push(
+      dists[i - 1] + getDistanceFromLatLonInKm(lat1, lng1, lat2, lng2),
+    );
+  }
+  return dists;
+}
+
+function interpolateAlong(coords, cum, total, t) {
+  const target = total * Math.max(0, Math.min(1, t));
+  if (target <= 0) return [coords[0]];
+  if (target >= total) return coords;
+
+  let idx = 1;
+  while (idx < cum.length && cum[idx] < target) idx++;
+  const segStart = cum[idx - 1];
+  const segEnd = cum[idx];
+  const segT =
+    segEnd === segStart ? 0 : (target - segStart) / (segEnd - segStart);
+  const [lat1, lng1] = coords[idx - 1];
+  const [lat2, lng2] = coords[idx];
+  const lat = lat1 + (lat2 - lat1) * segT;
+  const lng = lng1 + (lng2 - lng1) * segT;
+  return [...coords.slice(0, idx), [lat, lng]];
+}
+
+const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
 
 // ─── Canvas Heatmap Layer ─────────────────────────────────────────────────────
 function HeatmapLayer({ incidents, uLoc }) {
@@ -278,6 +323,54 @@ function AutoOpenUserPopup({ userLocation }) {
   return null;
 }
 
+// ─── MapResizeHandler ─────────────────────────────────────────────────────────
+// Mobile browsers change the *actual* viewport height as the user
+// touches/scrolls (the address bar/toolbar collapses or re-appears).
+// Dashboard.jsx sizes the map's container with `100dvh`, which correctly
+// tracks that — but Leaflet has no idea the container resized unless
+// something tells it to. Its internal pixel-origin/size cache goes stale,
+// so panes/tiles/markers get positioned against the OLD size until
+// something forces a recalculation. That staleness is what reads as "the
+// map refreshing," and it's also what can push the user marker outside
+// the area Leaflet currently thinks is visible.
+//
+// Fix: watch the actual container element with a ResizeObserver (same
+// pattern already used in AnimatedBackground.jsx for its canvas) and also
+// watch window.visualViewport, the most reliable resize signal on iOS
+// Safari specifically. invalidateSize({ animate:false, pan:false }) so it
+// re-measures without fighting any in-progress flyTo/fitBounds.
+function MapResizeHandler() {
+  const map = useMap();
+
+  useEffect(() => {
+    const container = map.getContainer();
+    if (!container) return;
+
+    let rafId = null;
+    const invalidate = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        map.invalidateSize({ animate: false, pan: false });
+      });
+    };
+
+    const ro = new ResizeObserver(invalidate);
+    ro.observe(container);
+
+    const vv = window.visualViewport;
+    vv?.addEventListener("resize", invalidate);
+
+    return () => {
+      ro.disconnect();
+      vv?.removeEventListener("resize", invalidate);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [map]);
+
+  return null;
+}
+
 // ─── MapCommandController ─────────────────────────────────────────────────────
 function MapCommandController({ cmd, userLocation, incidents }) {
   const map = useMap();
@@ -306,7 +399,8 @@ function MapCommandController({ cmd, userLocation, incidents }) {
           L.latLng(cmd.lat, cmd.lng),
         ]),
         {
-          padding: FIT_PAD,
+          paddingTopLeft: [90, 190],
+          paddingBottomRight: [90, 90],
           maxZoom: FIT_MAX_Z,
           animate: true,
           duration: FIT_DUR,
@@ -318,30 +412,24 @@ function MapCommandController({ cmd, userLocation, incidents }) {
         lat: DEFAULT_USER_LOC[0],
         lng: DEFAULT_USER_LOC[1],
       };
+      const nearbyIncidents = cmd.incidents ?? [];
 
-      const allPoints = [
-        L.latLng(uLoc.lat, uLoc.lng),
-        ...cmd.incidents.map((inc) => L.latLng(inc.lat, inc.lng)),
-      ];
+      if (nearbyIncidents.length === 0) {
+        map.setView([uLoc.lat, uLoc.lng], INITIAL_FIT_ZOOM, { animate: true });
+      } else {
+        const bounds = L.latLngBounds([
+          L.latLng(uLoc.lat, uLoc.lng),
+          ...nearbyIncidents.map((inc) => L.latLng(inc.lat, inc.lng)),
+        ]);
 
-      const R_DEG = RADIUS_M / 111000;
-      allPoints.push(
-        L.latLng(uLoc.lat + R_DEG, uLoc.lng),
-        L.latLng(uLoc.lat - R_DEG, uLoc.lng),
-        L.latLng(uLoc.lat, uLoc.lng + R_DEG),
-        L.latLng(uLoc.lat, uLoc.lng - R_DEG),
-      );
-
-      const bounds = L.latLngBounds(allPoints);
-
-      map.fitBounds(bounds, {
-        padding: FIT_PAD,
-        maxZoom: DEF_ZOOM, // Use DEF_ZOOM here
-        animate: true,
-        duration: 1.2,
-      });
+        map.fitBounds(bounds, {
+          padding: FIT_PAD,
+          maxZoom: INITIAL_FIT_ZOOM,
+          animate: true,
+          duration: 1.2,
+        });
+      }
     } else if (cmd.type === "resetView") {
-      // New command for reset button
       map.setView([userLocation.lat, userLocation.lng], DEF_ZOOM, {
         animate: true,
         duration: 1.5,
@@ -353,11 +441,31 @@ function MapCommandController({ cmd, userLocation, incidents }) {
 }
 
 // ─── PopupController ──────────────────────────────────────────────────────────
-function PopupController({ selectedId, markersRef }) {
-  const map = useMap();
+// Opens the selected incident's popup once RouteLine reports the draw-in
+// animation has arrived (routeDoneSignal), with a timeout fallback for
+// paths that never produce a route (heatmap mode, a failed fetch).
+//
+// Positioning is left entirely to Leaflet's own built-in autoPan (see the
+// autoPan* props on the incident <Popup> below) instead of a hand-rolled
+// getBoundingClientRect()+panBy() correction — see the explanation above
+// this file for why that combination was the actual bug.
+function PopupController({ selectedId, markersRef, routeDoneSignal }) {
   const prevIdRef = useRef(null);
   const prevMkrRef = useRef(null);
+  const fallbackTimerRef = useRef(null);
+  const openedKeyRef = useRef(null);
 
+  const openPopupSafely = useCallback((mkr) => {
+    try {
+      const p = mkr.getPopup();
+      if (!p) return;
+      p.options.autoClose = false;
+      p.options.closeOnClick = false;
+      mkr.openPopup();
+    } catch (_) {}
+  }, []);
+
+  // Close old popup / arm fallback whenever selection changes.
   useEffect(() => {
     if (selectedId === prevIdRef.current) return;
     prevIdRef.current = selectedId;
@@ -367,141 +475,276 @@ function PopupController({ selectedId, markersRef }) {
         prevMkrRef.current.closePopup();
       } catch (_) {}
     }
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
 
     if (!selectedId) return;
     const mkr = markersRef.current[selectedId];
     if (!mkr) return;
     prevMkrRef.current = mkr;
 
-    const openPopupSafely = () => {
-      try {
-        const p = mkr.getPopup();
-        if (p) {
-          p.options.autoClose = false;
-          p.options.closeOnClick = false;
-          p.options.offset = L.point(0, -10);
-          mkr.openPopup();
+    fallbackTimerRef.current = setTimeout(() => {
+      fallbackTimerRef.current = null;
+      openPopupSafely(mkr);
+    }, ROUTE_CAMERA_WAIT_FALLBACK_MS + ROUTE_ANIM_MAX_MS);
 
-          setTimeout(() => {
-            const markerPos = mkr.getLatLng();
-            const pixelPos = map.latLngToContainerPoint(markerPos);
-            const mapSize = map.getSize();
-
-            if (pixelPos.y < 150) {
-              const newCenter = map.containerPointToLatLng([
-                mapSize.x / 2,
-                mapSize.y / 2 + 50,
-              ]);
-              map.panTo(newCenter, { animate: true, duration: 0.3 });
-            }
-          }, 100);
-        }
-      } catch (_) {}
+    return () => {
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
     };
+  }, [selectedId, markersRef, openPopupSafely]);
 
-    setTimeout(openPopupSafely, FIT_DUR * 1000 + 200);
-  }, [selectedId, markersRef, map]);
+  // Open immediately once RouteLine reports the draw-in animation arrived.
+  useEffect(() => {
+    if (!routeDoneSignal || routeDoneSignal.id !== selectedId) return;
+    const key = `${routeDoneSignal.id}-${routeDoneSignal.at}`;
+    if (openedKeyRef.current === key) return;
+    openedKeyRef.current = key;
+
+    const mkr = markersRef.current[routeDoneSignal.id];
+    if (!mkr) return;
+
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
+    openPopupSafely(mkr);
+  }, [routeDoneSignal, selectedId, markersRef, openPopupSafely]);
 
   return null;
 }
 
 // ─── RouteLine ────────────────────────────────────────────────────────────────
-// Fixed: Polylines stay visible during map movement
-function RouteLine({ incident, userLocation, onInfo }) {
-  const [coords, setCoords] = useState([]);
-  const prevIdRef = useRef(null);
+function RouteLine({ incident, userLocation, onInfo, onArrived }) {
+  const map = useMap();
+  const [fullCoords, setFullCoords] = useState([]);
+  const [drawnCoords, setDrawnCoords] = useState([]);
+
+  const keyRef = useRef(null);
   const reportedRef = useRef(false);
+  const arrivedForRef = useRef(null);
   const abortRef = useRef(null);
+  const rafRef = useRef(null);
+  const cameraWaitCleanupRef = useRef(null);
+
+  const stopAnimation = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  const clearCameraWait = useCallback(() => {
+    if (cameraWaitCleanupRef.current) {
+      cameraWaitCleanupRef.current();
+      cameraWaitCleanupRef.current = null;
+    }
+  }, []);
 
   useEffect(() => {
     if (!incident) {
-      setCoords([]);
-      prevIdRef.current = null;
+      stopAnimation();
+      clearCameraWait();
+      if (abortRef.current) abortRef.current.abort();
+      setFullCoords([]);
+      setDrawnCoords([]);
+      keyRef.current = null;
       return;
     }
-    if (prevIdRef.current === incident.id) return;
-    prevIdRef.current = incident.id;
+
+    const key = incident.id;
+    if (keyRef.current === key) return;
+    keyRef.current = key;
     reportedRef.current = false;
+    arrivedForRef.current = null;
 
     if (abortRef.current) abortRef.current.abort();
+    stopAnimation();
+    clearCameraWait();
+    setFullCoords([]);
+    setDrawnCoords([]);
+
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+    let cancelled = false;
 
     const uLat = userLocation?.lat ?? DEFAULT_USER_LOC[0];
     const uLng = userLocation?.lng ?? DEFAULT_USER_LOC[1];
-    const url = `https://router.project-osrm.org/route/v1/driving/${uLng},${uLat};${incident.lng},${incident.lat}?overview=full&geometries=geojson&alternatives=false&continue_straight=false&annotations=false`;
 
-    fetch(url, { signal: ctrl.signal })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.code === "Ok" && d.routes?.length) {
-          const pts = d.routes[0].geometry.coordinates.map(([lng, lat]) => [
-            lat,
-            lng,
-          ]);
-          setCoords(pts);
-          if (!reportedRef.current) {
-            reportedRef.current = true;
-            onInfo?.({
-              distance: (d.routes[0].distance / 1000).toFixed(2),
-              duration: Math.round(d.routes[0].duration / 60),
-            });
-          }
+    const runAnimation = (coords, cum, total) => {
+      if (cancelled) return;
+      const durationMs = Math.min(
+        ROUTE_ANIM_MAX_MS,
+        Math.max(ROUTE_ANIM_MIN_MS, total * ROUTE_ANIM_MS_PER_KM),
+      );
+      let startTs = null;
+
+      const step = (ts) => {
+        if (cancelled) return;
+        if (startTs === null) startTs = ts;
+        const rawT = Math.min(1, (ts - startTs) / durationMs);
+        const t = easeOutCubic(rawT);
+        setDrawnCoords(interpolateAlong(coords, cum, total, t));
+
+        if (rawT < 1) {
+          rafRef.current = requestAnimationFrame(step);
         } else {
-          setCoords([
-            [uLat, uLng],
-            [incident.lat, incident.lng],
-          ]);
+          rafRef.current = null;
+          if (arrivedForRef.current !== key) {
+            arrivedForRef.current = key;
+            onArrived?.(incident.id);
+          }
         }
+      };
+      rafRef.current = requestAnimationFrame(step);
+    };
+
+    const waitForCameraThenAnimate = (coords, cum, total) => {
+      let started = false;
+
+      const onMoveEnd = () => {
+        if (started || cancelled) return;
+        started = true;
+        cameraWaitCleanupRef.current = null;
+        runAnimation(coords, cum, total);
+      };
+
+      const fallback = setTimeout(() => {
+        if (started || cancelled) return;
+        started = true;
+        map.off("moveend", onMoveEnd);
+        cameraWaitCleanupRef.current = null;
+        runAnimation(coords, cum, total);
+      }, ROUTE_CAMERA_WAIT_FALLBACK_MS);
+
+      map.once("moveend", onMoveEnd);
+
+      cameraWaitCleanupRef.current = () => {
+        map.off("moveend", onMoveEnd);
+        clearTimeout(fallback);
+      };
+    };
+
+    getRoute({
+      from: { lat: uLat, lng: uLng },
+      to: { lat: incident.lat, lng: incident.lng },
+      mode: TRAVEL_MODE,
+      signal: ctrl.signal,
+    })
+      .then((route) => {
+        if (cancelled) return;
+        const coords = route.coordinates;
+        setFullCoords(coords);
+
+        if (!reportedRef.current) {
+          reportedRef.current = true;
+          onInfo?.({
+            distance: route.distanceKm.toFixed(2),
+            duration: Math.max(1, Math.round(route.durationMin)),
+            estimated: route.estimated,
+          });
+        }
+
+        const cum = buildCumulativeDistances(coords);
+        const total = cum[cum.length - 1] || 0;
+
+        if (total <= 0 || coords.length < 2) {
+          setDrawnCoords(coords);
+          if (arrivedForRef.current !== key) {
+            arrivedForRef.current = key;
+            onArrived?.(incident.id);
+          }
+          return;
+        }
+
+        waitForCameraThenAnimate(coords, cum, total);
       })
       .catch((err) => {
-        if (err.name === "AbortError") return;
-        setCoords([
+        if (err.name === "AbortError" || cancelled) return;
+        const straight = [
           [uLat, uLng],
           [incident.lat, incident.lng],
-        ]);
+        ];
+        setFullCoords(straight);
+        setDrawnCoords(straight);
+        if (arrivedForRef.current !== key) {
+          arrivedForRef.current = key;
+          onArrived?.(incident.id);
+        }
       });
 
-    return () => ctrl.abort();
-  }, [incident?.id, userLocation?.lat, userLocation?.lng, onInfo]);
+    return () => {
+      cancelled = true;
+      stopAnimation();
+      clearCameraWait();
+    };
+  }, [
+    incident.id,
+    userLocation?.lat,
+    userLocation?.lng,
+    onInfo,
+    onArrived,
+    map,
+    stopAnimation,
+    clearCameraWait,
+    incident,
+  ]);
 
-  if (coords.length < 2) return null;
+  useEffect(() => {
+    return () => {
+      stopAnimation();
+      clearCameraWait();
+      if (abortRef.current) abortRef.current.abort();
+    };
+  }, [stopAnimation, clearCameraWait]);
+
+  if (fullCoords.length < 2) return null;
 
   return (
     <>
       <Polyline
-        positions={coords}
-        pathOptions={{
-          color: "#1d4ed8",
-          weight: 14,
-          opacity: 0.12,
-          lineCap: "round",
-          lineJoin: "round",
-        }}
-        interactive={false}
-      />
-      <Polyline
-        positions={coords}
-        pathOptions={{
-          color: "#3b82f6",
-          weight: 5,
-          opacity: 1,
-          lineCap: "round",
-          lineJoin: "round",
-        }}
-        interactive={false}
-      />
-      <Polyline
-        positions={coords}
+        positions={fullCoords}
         pathOptions={{
           color: "#93c5fd",
-          weight: 2,
-          opacity: 0.65,
+          weight: 3,
+          opacity: 0.35,
           lineCap: "round",
-          dashArray: "2 14",
+          lineJoin: "round",
+          dashArray: "2 10",
         }}
         interactive={false}
       />
+
+      {drawnCoords.length >= 2 && (
+        <>
+          <Polyline
+            positions={drawnCoords}
+            pathOptions={{
+              color: "#1d4ed8",
+              weight: 14,
+              opacity: 0.12,
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+            interactive={false}
+          />
+          <Polyline
+            positions={drawnCoords}
+            pathOptions={{
+              color: "#3b82f6",
+              weight: 5,
+              opacity: 1,
+              lineCap: "round",
+              lineJoin: "round",
+            }}
+            interactive={false}
+          />
+        </>
+      )}
     </>
   );
 }
@@ -531,8 +774,12 @@ function CrimeMap({
 }) {
   const markersRef = useRef({});
   const [routeInfo, setRouteInfo] = useState(null);
-  const [resetTrigger, setResetTrigger] = useState(0);
+  const [routeDoneSignal, setRouteDoneSignal] = useState(null);
+  const [resetCmd, setResetCmd] = useState(null);
   const handleRouteInfo = useCallback((info) => setRouteInfo(info), []);
+  const handleRouteArrived = useCallback((id) => {
+    setRouteDoneSignal({ id, at: Date.now() });
+  }, []);
 
   useEffect(() => {
     setRouteInfo(null);
@@ -563,31 +810,33 @@ function CrimeMap({
   const tileAttr = dark ? TILE_ATTR.dark : TILE_ATTR.light;
 
   const handleResetView = useCallback(() => {
-    setResetTrigger((prev) => prev + 1);
+    setResetCmd({ type: "resetView", triggeredAt: Date.now() });
   }, []);
 
-  // Create reset command
   const activeCommand = useMemo(() => {
-    if (resetTrigger > 0) {
-      return {
-        type: "resetView",
-        triggeredAt: resetTrigger,
-      };
-    }
-    return mapCommand;
-  }, [resetTrigger, mapCommand]);
+    if (!resetCmd) return mapCommand;
+    if (!mapCommand) return resetCmd;
+    return mapCommand.triggeredAt > resetCmd.triggeredAt
+      ? mapCommand
+      : resetCmd;
+  }, [resetCmd, mapCommand]);
 
   return (
     <div className="h-full w-full relative">
       <MapContainer
         center={[uLoc.lat, uLoc.lng]}
-        zoom={DEF_ZOOM}
+        zoom={INITIAL_FIT_ZOOM}
         maxZoom={MAX_SAFE_ZOOM}
         minZoom={10}
         className="h-full w-full"
         key="na-crime-map"
         zoomControl
         preferCanvas={true}
+        // See MapResizeHandler comment above for why this is disabled —
+        // it's a legacy 300ms-click-delay workaround that's redundant on
+        // modern mobile browsers and a known source of ghost taps right
+        // after a marker's icon swaps size on selection.
+        tap={false}
       >
         <TileLayer
           key={tileUrl}
@@ -599,12 +848,17 @@ function CrimeMap({
 
         <UserLayer userLocation={uLoc} />
         <AutoOpenUserPopup userLocation={uLoc} />
+        <MapResizeHandler />
         <MapCommandController
           cmd={activeCommand}
           userLocation={uLoc}
           incidents={meta}
         />
-        <PopupController selectedId={selectedId} markersRef={markersRef} />
+        <PopupController
+          selectedId={selectedId}
+          markersRef={markersRef}
+          routeDoneSignal={routeDoneSignal}
+        />
 
         {heatmapActive && <HeatmapLayer incidents={meta} uLoc={uLoc} />}
 
@@ -634,7 +888,11 @@ function CrimeMap({
                     if (r) markersRef.current[i.id] = r;
                   }}
                 >
-                  <Popup>
+                  <Popup
+                    autoPan={true}
+                    autoPanPaddingTopLeft={[20, 90]}
+                    autoPanPaddingBottomRight={[20, 90]}
+                  >
                     <div style={{ minWidth: 195 }}>
                       <p
                         style={{
@@ -690,11 +948,11 @@ function CrimeMap({
             incident={selected}
             userLocation={uLoc}
             onInfo={handleRouteInfo}
+            onArrived={handleRouteArrived}
           />
         )}
       </MapContainer>
 
-      {/* Reset View Button */}
       <ResetViewButton onClick={handleResetView} />
 
       {heatmapActive && (
@@ -713,21 +971,20 @@ function CrimeMap({
           }}
         >
           <div
-  className="
-    bg-blue-600 text-white font-semibold
-    rounded-full shadow-2xl flex items-center
-
-    px-3 py-1.5 text-xs gap-2   /* mobile */
-    sm:px-5 sm:py-2.5 sm:text-sm sm:gap-3  /* bigger screens */
-  "
->
-  <span>📍 {routeInfo.distance} km</span>
-
-  {/* divider hidden on very small screens */}
-  <span className="hidden xs:block opacity-30">|</span>
-
-  <span>🕐 ~{routeInfo.duration} min</span>
-</div>
+            className="
+              bg-blue-600 text-white font-semibold
+              rounded-full shadow-2xl flex items-center
+              px-3 py-1.5 text-xs gap-2
+              sm:px-5 sm:py-2.5 sm:text-sm sm:gap-3
+            "
+          >
+            <span>
+              🚗 {routeInfo.estimated ? "~" : ""}
+              {routeInfo.distance} km
+            </span>
+            <span className="hidden xs:block opacity-30">|</span>
+            <span>🕐 ~{routeInfo.duration} min</span>
+          </div>
         </div>
       )}
     </div>

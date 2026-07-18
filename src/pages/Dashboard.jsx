@@ -223,35 +223,36 @@ export default function Dashboard() {
     [incrementViews],
   );
 
-  // Marker click: smooth flyTo from current position to incident
+  // Dashboard.jsx
   const handleMarkerClick = useCallback(
     (id) => {
+      if (id === selectedId) return; // already selected — don't touch the camera
       setSelectedId(id);
       incrementViews(id);
       const inc = nearby.find((i) => i.id === id);
-      if (inc) {
-        // Smooth fly animation from current position to incident
-        setMapCommand(mkFlyTo(inc.lat, inc.lng, 17));
-      }
+      if (inc) setMapCommand(mkFlyTo(inc.lat, inc.lng, 17));
       requestAnimationFrame(() =>
         document
           .getElementById(`incident-${id}`)
           ?.scrollIntoView({ behavior: "smooth", block: "center" }),
       );
     },
-    [incrementViews, nearby],
+    [selectedId, incrementViews, nearby],
   );
 
-  // Sidebar click: fitBounds between user and selected incident
   const handleSidebarSelect = useCallback(
     (id) => {
+      if (id === selectedId) {
+        setSidebarOpen(false);
+        return;
+      }
       setSelectedId(id);
       incrementViews(id);
       const inc = nearby.find((i) => i.id === id);
       if (inc) setMapCommand(mkFitBounds(inc.lat, inc.lng));
       setSidebarOpen(false);
     },
-    [nearby, incrementViews],
+    [selectedId, nearby, incrementViews],
   );
 
   const handleCreate = useCallback(
