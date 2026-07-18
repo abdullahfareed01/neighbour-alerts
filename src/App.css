@@ -11,7 +11,9 @@
    USER MARKER ANIMATIONS
    =================================== */
 
-   html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   overflow: hidden;
 }
@@ -862,9 +864,9 @@ body {
 }
 .na-wave {
   position: absolute;
-  border-radius: 6px;
+  border-radius: 50%;
   border: 2.5px solid;
-  transform: rotate(45deg);
+  /* transform: rotate(45deg); */
   animation: naWavePulse 2.4s ease-out infinite;
 }
 .na-wave.w1 {
