@@ -18,6 +18,7 @@
  * by real HTTP calls to a backend that does this aggregation server-side.
  */
 import { STATUS_VALUES } from "../constants/incidentStatus";
+import { getSeverityTier } from "../constants/severity";
 
 const hoursAgo = (h) => new Date(Date.now() - h * 60 * 60 * 1000).toISOString();
 
@@ -222,19 +223,59 @@ const templates = [
 // repeatable (not random) across renders/reloads.
 const STATUS_CYCLE = STATUS_VALUES; // ["pending","under_review","verified","resolved","rejected"]
 
-export const MOCK_ADMIN_INCIDENTS = templates.map((t, i) => ({
-  id: `admin-inc-${String(i + 1).padStart(3, "0")}`,
-  title: t.title,
-  description: `${t.title}. Reported via the community app for review.`,
-  type: t.type,
-  status: STATUS_CYCLE[i % STATUS_CYCLE.length],
-  lat: t.lat,
-  lng: t.lng,
-  reporterId: `user-${String(i + 1).padStart(3, "0")}`,
-  reporterName: t.reporter,
-  views: (i * 7) % 40,
-  createdAt: hoursAgo(t.hoursAgo),
-}));
+// Short admin-facing note per status transition — used only to seed a
+// plausible initial statusHistory entry (see buildStatusHistory below).
+// The same notes are reused by adminApi.updateIncidentStatus so history
+// entries look consistent whether they were seeded or created live.
+export const STATUS_TRANSITION_NOTES = {
+  pending: "Incident submitted by reporter.",
+  under_review: "Flagged for manual verification.",
+  verified: "Confirmed as accurate by an administrator.",
+  resolved: "Issue addressed and marked resolved.",
+  rejected: "Report did not meet verification criteria.",
+};
+
+/** Builds a small, deterministic statusHistory array for a seed incident:
+ *  a "submitted" (pending) entry at createdAt, plus — if the incident's
+ *  current status isn't pending — one more entry for that status shortly
+ *  after. Keeps mock data simple while still giving
+ *  StatusHistoryTimeline.jsx real, orderable content instead of an empty
+ *  list. Live admin actions extend this same array (see
+ *  adminApi.updateIncidentStatus). */
+function buildStatusHistory(status, createdAt) {
+  const history = [
+    { status: "pending", at: createdAt, by: "System", note: STATUS_TRANSITION_NOTES.pending },
+  ];
+  if (status !== "pending") {
+    const reviewedAt = new Date(new Date(createdAt).getTime() + 45 * 60 * 1000).toISOString();
+    history.push({
+      status,
+      at: reviewedAt,
+      by: "Admin User",
+      note: STATUS_TRANSITION_NOTES[status],
+    });
+  }
+  return history;
+}
+
+export const MOCK_ADMIN_INCIDENTS = templates.map((t, i) => {
+  const status = STATUS_CYCLE[i % STATUS_CYCLE.length];
+  const createdAt = hoursAgo(t.hoursAgo);
+  return {
+    id: `admin-inc-${String(i + 1).padStart(3, "0")}`,
+    title: t.title,
+    description: `${t.title}. Reported via the community app for review.`,
+    type: t.type,
+    status,
+    lat: t.lat,
+    lng: t.lng,
+    reporterId: `user-${String(i + 1).padStart(3, "0")}`,
+    reporterName: t.reporter,
+    views: (i * 7) % 40,
+    createdAt,
+    statusHistory: buildStatusHistory(status, createdAt),
+  };
+});
 
 // Note: `templates` above intentionally covers every incident type defined
 // in constants/incidentTypes.js at least twice, so category summaries have
@@ -330,4 +371,52 @@ export function getRecentIncidents(
   return [...incidents]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, limit);
+}
+
+/** Default shape for Incident Management filters — mirrors
+ *  IncidentFilters.jsx's own DEFAULT_INCIDENT_FILTERS so the two stay in
+ *  sync without importing a component file from here. */
+export const DEFAULT_INCIDENT_FILTERS = {
+  search: "",
+  type: "all",
+  severity: "all",
+  status: "all",
+  dateFrom: "",
+  dateTo: "",
+};
+
+/** Pure filter over incidents for the Incident Management table — search
+ *  (title/description), category, severity (derived the same way
+ *  SeverityBadge.jsx does, via TYPE_DANGER_TIER), status, and a
+ *  createdAt date range. Returns a new array; never mutates input. */
+export function applyIncidentFilters(incidents = MOCK_ADMIN_INCIDENTS, filters = {}) {
+  const { search, type, severity, status, dateFrom, dateTo } = {
+    ...DEFAULT_INCIDENT_FILTERS,
+    ...filters,
+  };
+
+  const q = search.trim().toLowerCase();
+  const fromTime = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+  const toTime = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
+
+  return incidents.filter((inc) => {
+    if (
+      q &&
+      !inc.title.toLowerCase().includes(q) &&
+      !inc.description.toLowerCase().includes(q)
+    ) {
+      return false;
+    }
+    if (type !== "all" && inc.type !== type) return false;
+    if (severity !== "all" && getSeverityTier(inc.type) !== severity) return false;
+    if (status !== "all" && inc.status !== status) return false;
+
+    if (fromTime !== null || toTime !== null) {
+      const created = new Date(inc.createdAt).getTime();
+      if (fromTime !== null && created < fromTime) return false;
+      if (toTime !== null && created > toTime) return false;
+    }
+
+    return true;
+  });
 }

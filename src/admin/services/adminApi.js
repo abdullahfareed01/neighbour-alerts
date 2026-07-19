@@ -19,7 +19,9 @@ import {
   MOCK_ADMIN_INCIDENTS,
   computeAdminStats,
   getRecentIncidents,
+  applyIncidentFilters,
 } from "../data/adminMock";
+import { STATUS_VALUES } from "../constants/incidentStatus";
 
 const delay = (ms = 450) => new Promise((r) => setTimeout(r, ms));
 
@@ -75,17 +77,35 @@ const ADMIN_TOKEN_KEY = "na-admin-token";
 const ADMIN_USER_KEY  = "na-admin-user";
 
 // ─── Admin Incidents API ──────────────────────────────────────────────────────
-// Phase 2 scope: dashboard-facing reads only (aggregate stats + a recent-
-// incidents preview). Mutating endpoints (updateIncidentStatus, deleteIncident)
-// and the full incident list/detail endpoints belong to the Incident
-// Management phase and are intentionally not added yet.
+// Phase 2 added dashboard-facing reads (aggregate stats + a recent-
+// incidents preview). Phase 3 (Incident Management) adds: a filterable +
+// paginated incident list, single-incident lookup, and the mutating
+// endpoints (status changes, delete) used by IncidentActions.jsx.
 //
-// The aggregation itself lives in admin/data/adminMock.js as plain, pure
-// functions — this file's only job is to simulate the network boundary
-// (delay + { data } envelope) around them, exactly like incidentsAPI /
-// authAPI do in services/api.js. When a real backend exists, only the
-// bodies below change (to real HTTP calls); callers (AdminDashboard.jsx)
+// The aggregation/filtering itself lives in admin/data/adminMock.js as
+// plain, pure functions — this file's only job is to simulate the network
+// boundary (delay + { data } envelope, throwing on "not found") around
+// them, exactly like incidentsAPI/authAPI do in services/api.js. When a
+// real backend exists, only the bodies below change (to real HTTP calls);
+// callers (AdminDashboard.jsx, AdminIncidents.jsx, AdminIncidentDetail.jsx)
 // don't need to change at all.
+//
+// MOCK PERSISTENCE NOTE: MOCK_ADMIN_INCIDENTS is a module-level array, so
+// mutations below (status changes, deletes) persist for the lifetime of
+// the browser session/tab and are immediately visible to every other
+// admin page (e.g. the Overview Dashboard's stats) since they all read
+// from this same array. A full page reload resets everything back to the
+// seed data in adminMock.js — expected for a frontend-only mock phase.
+function findIncidentOrThrow(id) {
+  const incident = MOCK_ADMIN_INCIDENTS.find((i) => i.id === id);
+  if (!incident) {
+    const err = new Error(`No incident found with ID "${id}".`);
+    err.code = "INCIDENT_NOT_FOUND";
+    throw err;
+  }
+  return incident;
+}
+
 export const adminIncidentsAPI = {
   /**
    * GET /api/admin/stats
@@ -103,27 +123,117 @@ export const adminIncidentsAPI = {
   },
 
   /**
-   * GET /api/admin/incidents?limit=&sort=recent
-   * Returns incidents sorted newest-first. Used today only for the
-   * dashboard's "Recent Incidents" preview (via `limit`); the full
-   * filterable incident table is a later phase.
+   * GET /api/admin/incidents?limit=&sort=recent            (dashboard preview)
+   * GET /api/admin/incidents?filters=&page=&pageSize=       (management table)
+   *
+   * Two call shapes on purpose, kept backward-compatible:
+   *  - `{ limit }` (AdminDashboard.jsx's "Recent Incidents" preview): same
+   *    behavior as Phase 2 — newest-first, sliced to `limit`, unfiltered.
+   *  - `{ filters, page, pageSize }` (AdminIncidents.jsx's management
+   *    table): sorted newest-first, filtered via applyIncidentFilters,
+   *    then paginated. Returns page/pageSize/totalPages alongside the
+   *    total (pre-pagination, post-filter) `count`.
    *
    * PRODUCTION:
    *   getAdminIncidents: (params) => http.get("/admin/incidents", { params }),
    */
-  getAdminIncidents: async ({ limit } = {}) => {
+  getAdminIncidents: async ({ limit, filters, page = 1, pageSize } = {}) => {
     await delay(400);
-    const incidents = limit
-      ? getRecentIncidents(MOCK_ADMIN_INCIDENTS, limit)
-      : getRecentIncidents(MOCK_ADMIN_INCIDENTS, MOCK_ADMIN_INCIDENTS.length);
-    return { data: { incidents, count: incidents.length } };
+
+    // Dashboard preview path — unchanged from Phase 2.
+    if (limit && !filters && !pageSize) {
+      const incidents = getRecentIncidents(MOCK_ADMIN_INCIDENTS, limit);
+      return { data: { incidents, count: incidents.length } };
+    }
+
+    // Incident Management table path — filter, then paginate.
+    const sorted = getRecentIncidents(MOCK_ADMIN_INCIDENTS, MOCK_ADMIN_INCIDENTS.length);
+    const filtered = applyIncidentFilters(sorted, filters);
+    const totalCount = filtered.length;
+
+    if (pageSize) {
+      const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+      const safePage = Math.min(Math.max(1, page), totalPages);
+      const start = (safePage - 1) * pageSize;
+      const incidents = filtered.slice(start, start + pageSize);
+      return {
+        data: { incidents, count: totalCount, page: safePage, pageSize, totalPages },
+      };
+    }
+
+    return { data: { incidents: filtered, count: totalCount } };
   },
 
-  // Reserved for later phases (kept here only as a map of what's coming,
+  /**
+   * GET /api/admin/incidents/:id
+   * Full single-incident record (used by AdminIncidentDetail.jsx) —
+   * includes statusHistory, reporter info, and coordinates.
+   *
+   * PRODUCTION:
+   *   getAdminIncidentById: (id) => http.get(`/admin/incidents/${id}`),
+   */
+  getAdminIncidentById: async (id) => {
+    await delay(350);
+    const incident = findIncidentOrThrow(id);
+    return { data: { incident } };
+  },
+
+  /**
+   * PATCH /api/admin/incidents/:id/status
+   * Updates an incident's status and appends an entry to its
+   * statusHistory (mirrors the shape seeded by adminMock's
+   * buildStatusHistory, so timeline entries look consistent whether
+   * they were seeded or created live).
+   *
+   * PRODUCTION:
+   *   updateIncidentStatus: (id, status, note) =>
+   *     http.patch(`/admin/incidents/${id}/status`, { status, note }),
+   */
+  updateIncidentStatus: async (id, status, note) => {
+    await delay(450);
+    const incident = findIncidentOrThrow(id);
+
+    if (!STATUS_VALUES.includes(status)) {
+      const err = new Error(`"${status}" is not a valid incident status.`);
+      err.code = "INVALID_STATUS";
+      throw err;
+    }
+
+    incident.status = status;
+    incident.statusHistory = [
+      ...(incident.statusHistory ?? []),
+      {
+        status,
+        at: new Date().toISOString(),
+        by: MOCK_ADMIN.name,
+        note,
+      },
+    ];
+
+    return { data: { incident } };
+  },
+
+  /**
+   * DELETE /api/admin/incidents/:id
+   * Permanently removes an incident from the mock store.
+   *
+   * PRODUCTION:
+   *   deleteIncident: (id) => http.delete(`/admin/incidents/${id}`),
+   */
+  deleteIncident: async (id) => {
+    await delay(400);
+    const index = MOCK_ADMIN_INCIDENTS.findIndex((i) => i.id === id);
+    if (index === -1) {
+      const err = new Error(`No incident found with ID "${id}".`);
+      err.code = "INCIDENT_NOT_FOUND";
+      throw err;
+    }
+    const [removed] = MOCK_ADMIN_INCIDENTS.splice(index, 1);
+    return { data: { deleted: true, id: removed.id } };
+  },
+
+  // Reserved for a later phase (kept here only as a map of what's coming,
   // per CLAUDE.md §5 — not implemented yet):
-  //   getAdminIncidentById(id)
-  //   updateIncidentStatus(id, status)
-  //   deleteIncident(id)
   //   getAdminUsers()
 };
 
