@@ -32,8 +32,14 @@ export default function Pagination({
   return (
     <div className="flex items-center justify-between gap-3 flex-wrap px-1">
       <p className="text-[11px] text-gray-400 dark:text-slate-500">
-        Showing <span className="font-semibold text-gray-600 dark:text-slate-300">{start}–{end}</span> of{" "}
-        <span className="font-semibold text-gray-600 dark:text-slate-300">{totalCount}</span>
+        Showing{" "}
+        <span className="font-semibold text-gray-600 dark:text-slate-300">
+          {start}–{end}
+        </span>{" "}
+        of{" "}
+        <span className="font-semibold text-gray-600 dark:text-slate-300">
+          {totalCount}
+        </span>
       </p>
 
       <div className="flex items-center gap-2">
