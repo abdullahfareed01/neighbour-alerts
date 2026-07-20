@@ -63,7 +63,11 @@ export default function AdminUsers() {
     setLoading(true);
     setError(null);
     adminUsersAPI
-      .getAdminUsers({ filters: nextFilters, page: nextPage, pageSize: PAGE_SIZE })
+      .getAdminUsers({
+        filters: nextFilters,
+        page: nextPage,
+        pageSize: PAGE_SIZE,
+      })
       .then(({ data }) => {
         setUsers(data.users);
         setTotalCount(data.count);
@@ -76,7 +80,7 @@ export default function AdminUsers() {
 
   // Initial load.
   useEffect(() => {
-    load(DEFAULT_USER_FILTERS, 1);
+    Promise.resolve().then(() => load(DEFAULT_USER_FILTERS, 1));
   }, [load]);
 
   const handleFiltersChange = useCallback(
@@ -88,7 +92,10 @@ export default function AdminUsers() {
       // feel immediate.
       if (Object.prototype.hasOwnProperty.call(patch, "search")) {
         clearTimeout(searchDebounceRef.current);
-        searchDebounceRef.current = setTimeout(() => load(next, 1), SEARCH_DEBOUNCE_MS);
+        searchDebounceRef.current = setTimeout(
+          () => load(next, 1),
+          SEARCH_DEBOUNCE_MS,
+        );
       } else {
         load(next, 1);
       }
@@ -152,7 +159,11 @@ export default function AdminUsers() {
 
       {error ? (
         <div className="bg-white dark:bg-na-surface rounded-2xl border border-gray-100 dark:border-na-border shadow-sm">
-          <EmptyState icon={AlertTriangle} title="Couldn't load users" description={error} />
+          <EmptyState
+            icon={AlertTriangle}
+            title="Couldn't load users"
+            description={error}
+          />
           <div className="pb-6 flex justify-center">
             <button
               onClick={() => load(filters, page)}
