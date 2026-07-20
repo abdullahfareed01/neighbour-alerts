@@ -19,6 +19,7 @@ import AdminIncidents from "./admin/pages/AdminIncidents";
 import AdminIncidentDetail from "./admin/pages/AdminIncidentDetail";
 import AdminMap from "./admin/pages/AdminMap";
 import AdminUsers from "./admin/pages/AdminUsers";
+import AdminUserDetail from "./admin/pages/AdminUserDetail";
 import AdminAnalytics from "./admin/pages/AdminAnalytics";
 import AdminSettings from "./admin/pages/AdminSettings";
 
@@ -85,6 +86,8 @@ export default function App() {
                 <Route path="map" element={<AdminMap />} />
 
                 <Route path="users" element={<AdminUsers />} />
+
+                <Route path="users/:id" element={<AdminUserDetail />} />
 
                 <Route path="analytics" element={<AdminAnalytics />} />
 

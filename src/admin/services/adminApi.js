@@ -21,7 +21,15 @@ import {
   getRecentIncidents,
   applyIncidentFilters,
 } from "../data/adminMock";
+import {
+  MOCK_ADMIN_USERS,
+  applyUserFilters,
+  sortUsersByJoinDate,
+  getUserReports,
+  getUserReportCount,
+} from "../data/adminUsersMock";
 import { STATUS_VALUES } from "../constants/incidentStatus";
+import { USER_STATUS_VALUES } from "../constants/userStatus";
 
 const delay = (ms = 450) => new Promise((r) => setTimeout(r, ms));
 
@@ -74,7 +82,7 @@ export const adminAuthAPI = {
 // collide. AdminAuthContext is the single source of truth for admin auth
 // *state*; these are just the persistence layer underneath it.
 const ADMIN_TOKEN_KEY = "na-admin-token";
-const ADMIN_USER_KEY  = "na-admin-user";
+const ADMIN_USER_KEY = "na-admin-user";
 
 // ─── Admin Incidents API ──────────────────────────────────────────────────────
 // Phase 2 added dashboard-facing reads (aggregate stats + a recent-
@@ -147,7 +155,10 @@ export const adminIncidentsAPI = {
     }
 
     // Incident Management table path — filter, then paginate.
-    const sorted = getRecentIncidents(MOCK_ADMIN_INCIDENTS, MOCK_ADMIN_INCIDENTS.length);
+    const sorted = getRecentIncidents(
+      MOCK_ADMIN_INCIDENTS,
+      MOCK_ADMIN_INCIDENTS.length,
+    );
     const filtered = applyIncidentFilters(sorted, filters);
     const totalCount = filtered.length;
 
@@ -157,7 +168,13 @@ export const adminIncidentsAPI = {
       const start = (safePage - 1) * pageSize;
       const incidents = filtered.slice(start, start + pageSize);
       return {
-        data: { incidents, count: totalCount, page: safePage, pageSize, totalPages },
+        data: {
+          incidents,
+          count: totalCount,
+          page: safePage,
+          pageSize,
+          totalPages,
+        },
       };
     }
 
@@ -231,10 +248,123 @@ export const adminIncidentsAPI = {
     const [removed] = MOCK_ADMIN_INCIDENTS.splice(index, 1);
     return { data: { deleted: true, id: removed.id } };
   },
+};
 
-  // Reserved for a later phase (kept here only as a map of what's coming,
-  // per CLAUDE.md §5 — not implemented yet):
-  //   getAdminUsers()
+// ─── Admin Users API ──────────────────────────────────────────────────────────
+// Phase 5 (User Management). Same conventions as adminIncidentsAPI above:
+// simulated network delay + { data } envelope, a findOrThrow guard, and a
+// PRODUCTION comment over every function showing the real-backend
+// equivalent. The roster + filtering/derivation logic itself lives in
+// admin/data/adminUsersMock.js as plain pure functions — this file's only
+// job is the network-boundary simulation around them.
+//
+// MOCK PERSISTENCE NOTE: MOCK_ADMIN_USERS is a module-level array, same as
+// MOCK_ADMIN_INCIDENTS — suspend/restore mutations persist for the
+// lifetime of the browser session/tab and are immediately visible
+// everywhere (list, detail page), and reset on a full page reload.
+//
+// "Number of reports" is deliberately computed here (via
+// getUserReportCount/getUserReports against MOCK_ADMIN_INCIDENTS) rather
+// than read off a stored field — see adminUsersMock.js's header for why.
+function findUserOrThrow(id) {
+  const user = MOCK_ADMIN_USERS.find((u) => u.id === id);
+  if (!user) {
+    const err = new Error(`No user found with ID "${id}".`);
+    err.code = "USER_NOT_FOUND";
+    throw err;
+  }
+  return user;
+}
+
+function withReportCount(user) {
+  return {
+    ...user,
+    reportsCount: getUserReportCount(user.id, MOCK_ADMIN_INCIDENTS),
+  };
+}
+
+export const adminUsersAPI = {
+  /**
+   * GET /api/admin/users?filters=&page=&pageSize=
+   * Filtered (search + status) + paginated user list for the User
+   * Management table. Sorted newest-joined-first by default. Each user
+   * comes back with a live `reportsCount` attached.
+   *
+   * PRODUCTION:
+   *   getAdminUsers: (params) => http.get("/admin/users", { params }),
+   */
+  getAdminUsers: async ({ filters, page = 1, pageSize = 10 } = {}) => {
+    await delay(400);
+
+    const sorted = sortUsersByJoinDate(MOCK_ADMIN_USERS);
+    const filtered = applyUserFilters(sorted, filters).map(withReportCount);
+    const totalCount = filtered.length;
+
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    const start = (safePage - 1) * pageSize;
+    const users = filtered.slice(start, start + pageSize);
+
+    return {
+      data: { users, count: totalCount, page: safePage, pageSize, totalPages },
+    };
+  },
+
+  /**
+   * GET /api/admin/users/:id
+   * Full single-user record (used by AdminUserDetail.jsx) plus the list
+   * of incidents they've reported, newest first.
+   *
+   * PRODUCTION:
+   *   getAdminUserById: (id) => http.get(`/admin/users/${id}`),
+   */
+  getAdminUserById: async (id) => {
+    await delay(350);
+    const user = findUserOrThrow(id);
+    return {
+      data: {
+        user: withReportCount(user),
+        reports: getUserReports(id, MOCK_ADMIN_INCIDENTS),
+      },
+    };
+  },
+
+  /**
+   * PATCH /api/admin/users/:id/status  { status: "suspended" }
+   * Suspends a user account. Frontend-only mock — no session revocation,
+   * no real access control; just flips the mock status field.
+   *
+   * PRODUCTION:
+   *   suspendUser: (id) => http.patch(`/admin/users/${id}/status`, { status: "suspended" }),
+   */
+  suspendUser: async (id) => {
+    await delay(400);
+    const user = findUserOrThrow(id);
+    user.status = "suspended";
+    return { data: { user: withReportCount(user) } };
+  },
+
+  /**
+   * PATCH /api/admin/users/:id/status  { status: "active" }
+   * Restores a previously suspended user account back to active.
+   *
+   * PRODUCTION:
+   *   restoreUser: (id) => http.patch(`/admin/users/${id}/status`, { status: "active" }),
+   */
+  restoreUser: async (id) => {
+    await delay(400);
+    const user = findUserOrThrow(id);
+    if (!USER_STATUS_VALUES.includes("active")) {
+      // Defensive guard only — "active" is always a valid value in
+      // constants/userStatus.js; this just keeps the same validation
+      // shape as updateIncidentStatus above in case that ever changes.
+      const err = new Error(`"active" is not a valid user status.`);
+      err.code = "INVALID_STATUS";
+      throw err;
+    }
+    user.status = "active";
+    return { data: { user: withReportCount(user) } };
+  },
 };
 
 export const adminAuthHelpers = {

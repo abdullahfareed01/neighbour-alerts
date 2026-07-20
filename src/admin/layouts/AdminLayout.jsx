@@ -25,6 +25,7 @@ const PAGE_TITLES = {
 function titleForPath(pathname) {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith("/admin/incidents/")) return "Incident Details";
+  if (pathname.startsWith("/admin/users/")) return "User Details";
   return "Admin";
 }
 
