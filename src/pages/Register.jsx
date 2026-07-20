@@ -9,6 +9,7 @@ import {
   Moon,
   Sun,
   ArrowRight,
+  ArrowLeft,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -139,6 +140,19 @@ function Register() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="w-full max-w-md"
         >
+          {/* Back to Welcome */}
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.15 }}
+            onClick={() => navigate("/")}
+            className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+          >
+            <ArrowLeft size={14} />
+            Back
+          </motion.button>
+
           {/* Logo & Title */}
           <div className="text-center mb-8">
             <motion.div
@@ -350,7 +364,7 @@ function Register() {
                     Already have an account?{" "}
                     <button
                       type="button"
-                      onClick={() => navigate("/")}
+                      onClick={() => navigate("/login")}
                       className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                     >
                       Sign in

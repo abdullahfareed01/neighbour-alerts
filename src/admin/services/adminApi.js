@@ -30,6 +30,7 @@ import {
 } from "../data/adminUsersMock";
 import { STATUS_VALUES } from "../constants/incidentStatus";
 import { USER_STATUS_VALUES } from "../constants/userStatus";
+import { computeAdminAnalytics } from "../data/adminAnalyticsMock";
 
 const delay = (ms = 450) => new Promise((r) => setTimeout(r, ms));
 
@@ -364,6 +365,38 @@ export const adminUsersAPI = {
     }
     user.status = "active";
     return { data: { user: withReportCount(user) } };
+  },
+};
+
+// ─── Admin Analytics API ───────────────────────────────────────────────────────
+// Phase 6 (Admin Analytics). Single read endpoint — the aggregation logic
+// itself lives in admin/data/adminAnalyticsMock.js as plain pure functions
+// (same "data file owns computation, this file only simulates the network
+// boundary" convention as adminIncidentsAPI/adminUsersAPI above). Reads
+// live off the same module-level MOCK_ADMIN_INCIDENTS / MOCK_ADMIN_USERS
+// arrays used everywhere else, so Analytics always reflects any
+// in-session status changes, suspensions, or deletions an admin has made
+// elsewhere — no separate analytics dataset to fall out of sync.
+export const adminAnalyticsAPI = {
+  /**
+   * GET /api/admin/analytics
+   * Returns incidents-over-time, category/severity/status breakdowns,
+   * most-affected areas, resolution statistics, and user reporting
+   * activity in a single payload.
+   *
+   * PRODUCTION:
+   *   getAdminAnalytics: () => http.get("/admin/analytics"),
+   */
+  getAdminAnalytics: async () => {
+    await delay(450);
+    return {
+      data: {
+        analytics: computeAdminAnalytics({
+          incidents: MOCK_ADMIN_INCIDENTS,
+          users: MOCK_ADMIN_USERS,
+        }),
+      },
+    };
   },
 };
 
