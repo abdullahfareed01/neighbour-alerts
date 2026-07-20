@@ -1,21 +1,34 @@
+/**
+ * pages/Register.jsx
+ *
+ * Redesigned to match the lighter visual language introduced by
+ * Welcome.jsx / AdminLogin.jsx / the redesigned Login.jsx: soft ambient
+ * blobs on a calm bg-gray-50/na-navy surface instead of the old LiveMap
+ * canvas background + glassmorphism card, and the shared AuthInput
+ * component instead of duplicating hand-rolled icon-inputs (this also
+ * removes the manual showPassword/showConfirmPassword state — AuthInput
+ * already has its own show/hide toggle built in). Drops the page-local
+ * `darkMode` state in favor of the same <ThemeToggle/> every other page
+ * uses.
+ *
+ * Validation and submit logic are untouched: still goes through
+ * useAuth()/authAPI exactly as before, including the password-strength
+ * meter.
+ */
 import { useState } from "react";
 import {
-  Mail,
-  Lock,
-  User,
-  Eye,
-  EyeOff,
   Shield,
-  Moon,
-  Sun,
-  ArrowRight,
   ArrowLeft,
+  ArrowRight,
+  AlertCircle,
+  Loader2,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import LiveMap from "../components/LiveMap";
 import { useAuth } from "../context/AuthContext";
 import { authAPI } from "../services/api";
+import AuthInput from "../components/auth/AuthInput";
+import ThemeToggle from "../components/ui/ThemeToggle";
 
 function Register() {
   const [formData, setFormData] = useState({
@@ -24,12 +37,8 @@ function Register() {
     password: "",
     confirmPassword: "",
   });
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [focusedField, setFocusedField] = useState(null);
-  const [darkMode, setDarkMode] = useState(true);
   const navigate = useNavigate();
   const { login } = useAuth();
 
@@ -92,301 +101,164 @@ function Register() {
   const strengthLabels = ["", "Weak", "Fair", "Good", "Strong"];
 
   return (
-    <div className="relative min-h-screen w-full overflow-hidden transition-colors duration-500">
-      <LiveMap darkMode={darkMode} blur={focusedField !== null} />
+    <div className="relative min-h-screen flex flex-col bg-gray-50 dark:bg-na-navy px-4 overflow-hidden">
+      {/* Soft ambient glow — same treatment as Welcome.jsx, no canvas/map */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -top-32 -left-24 w-80 h-80 rounded-full bg-blue-200/40 dark:bg-blue-900/20 blur-3xl"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute -bottom-32 -right-24 w-80 h-80 rounded-full bg-violet-200/40 dark:bg-violet-900/20 blur-3xl"
+      />
 
-      {/* Overlay Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-black/20 via-transparent to-black/30 dark:from-black/40 dark:via-transparent dark:to-black/50 pointer-events-none transition-opacity duration-500" />
+      <div className="absolute top-4 right-4 z-10">
+        <ThemeToggle />
+      </div>
 
-      {/* Dark Mode Toggle */}
-      <motion.button
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5 }}
-        onClick={() => {
-          setDarkMode(!darkMode);
-          document.documentElement.classList.toggle("dark", !darkMode);
-        }}
-        className="absolute top-6 right-6 z-50 w-12 h-12 rounded-full backdrop-blur-xl bg-white/10 dark:bg-black/20 border border-white/20 flex items-center justify-center text-gray-800 dark:text-white hover:scale-110 active:scale-95 transition-all duration-300 shadow-lg"
-      >
-        <AnimatePresence mode="wait">
-          {darkMode ? (
-            <motion.div
-              key="moon"
-              initial={{ rotate: -90, opacity: 0 }}
-              animate={{ rotate: 0, opacity: 1 }}
-              exit={{ rotate: 90, opacity: 0 }}
-            >
-              <Moon className="w-5 h-5" />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="sun"
-              initial={{ rotate: -90, opacity: 0 }}
-              animate={{ rotate: 0, opacity: 1 }}
-              exit={{ rotate: 90, opacity: 0 }}
-            >
-              <Sun className="w-5 h-5" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.button>
-
-      {/* Main Content */}
-      <div className="relative z-30 min-h-screen flex items-center justify-center p-4">
+      <div className="relative flex-1 flex items-center justify-center py-10">
         <motion.div
-          initial={{ opacity: 0, scale: 0.9, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="w-full max-w-md"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4 }}
+          className="w-full max-w-sm"
         >
           {/* Back to Welcome */}
-          <motion.button
+          <button
             type="button"
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.15 }}
             onClick={() => navigate("/")}
-            className="mb-4 flex items-center gap-1.5 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+            className="mb-5 flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
           >
             <ArrowLeft size={14} />
             Back
-          </motion.button>
+          </button>
 
-          {/* Logo & Title */}
-          <div className="text-center mb-8">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", delay: 0.3, stiffness: 200 }}
-              className="inline-block mb-6 relative"
-            >
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-500 to-violet-600 rounded-full blur-xl opacity-50 animate-pulse" />
-              <div className="relative w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center shadow-2xl">
-                <Shield className="w-10 h-10 text-white" />
-              </div>
-            </motion.div>
-
-            <motion.h1
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-              className="text-5xl font-bold mb-2 bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 bg-clip-text text-transparent"
-            >
-              Join Us
-            </motion.h1>
-
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="text-sm text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2"
-            >
-              <Shield className="w-4 h-4" />
-              Community Safety Network
-            </motion.p>
+          {/* Brand */}
+          <div className="text-center mb-6">
+            <div className="inline-flex w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-600 to-violet-600 items-center justify-center shadow-lg mb-4">
+              <Shield size={26} className="text-white" />
+            </div>
+            <h1 className="text-xl font-bold text-gray-900 dark:text-slate-100">
+              Create your account
+            </h1>
+            <p className="text-sm text-gray-400 dark:text-slate-500 mt-0.5">
+              Join your neighbours keeping the community safe.
+            </p>
           </div>
 
-          {/* Register Card */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-            className="backdrop-blur-xl bg-white/70 dark:bg-black/30 border border-white/30 dark:border-white/10 rounded-3xl shadow-2xl overflow-hidden"
-          >
-            <div className="relative p-8">
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Name Field */}
-                <div className="group">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Full Name
-                  </label>
-                  <div className="relative">
-                    <User
-                      className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "name" ? "text-blue-500" : "text-gray-400 dark:text-gray-600"}`}
-                    />
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => handleChange("name", e.target.value)}
-                      onFocus={() => setFocusedField("name")}
-                      onBlur={() => setFocusedField(null)}
-                      className="w-full pl-12 pr-4 py-3 bg-white/50 dark:bg-black/30 border-2 border-gray-200 dark:border-white/10 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all"
-                      placeholder="John Doe"
-                      required
-                    />
-                  </div>
-                </div>
+          {/* Card */}
+          <div className="bg-white dark:bg-na-surface border border-gray-100 dark:border-na-border rounded-2xl shadow-sm p-6">
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+              <AuthInput
+                id="register-name"
+                label="Full Name"
+                value={formData.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+                autoComplete="name"
+                disabled={loading}
+              />
+              <AuthInput
+                id="register-email"
+                label="Email Address"
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleChange("email", e.target.value)}
+                autoComplete="email"
+                disabled={loading}
+              />
 
-                {/* Email Field */}
-                <div className="group">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <Mail
-                      className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "email" ? "text-blue-500" : "text-gray-400 dark:text-gray-600"}`}
-                    />
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => handleChange("email", e.target.value)}
-                      onFocus={() => setFocusedField("email")}
-                      onBlur={() => setFocusedField(null)}
-                      className="w-full pl-12 pr-4 py-3 bg-white/50 dark:bg-black/30 border-2 border-gray-200 dark:border-white/10 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all"
-                      placeholder="you@example.com"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Password Field */}
-                <div className="group">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <Lock
-                      className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "password" ? "text-blue-500" : "text-gray-400 dark:text-gray-600"}`}
-                    />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={formData.password}
-                      onChange={(e) => handleChange("password", e.target.value)}
-                      onFocus={() => setFocusedField("password")}
-                      onBlur={() => setFocusedField(null)}
-                      className="w-full pl-12 pr-12 py-3 bg-white/50 dark:bg-black/30 border-2 border-gray-200 dark:border-white/10 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all"
-                      placeholder="••••••••"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-400 transition-colors"
-                    >
-                      {showPassword ? (
-                        <EyeOff className="w-5 h-5" />
-                      ) : (
-                        <Eye className="w-5 h-5" />
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Password Strength */}
-                  {formData.password && (
-                    <div className="mt-2">
-                      <div className="flex gap-1 mb-1">
-                        {[1, 2, 3, 4].map((i) => (
-                          <div
-                            key={i}
-                            className={`h-1 flex-1 rounded-full transition-all ${i <= passwordStrength ? strengthColors[passwordStrength] : "bg-gray-300 dark:bg-gray-700"}`}
-                          />
-                        ))}
-                      </div>
-                      <p className="text-xs text-gray-600 dark:text-gray-400">
-                        Strength: {strengthLabels[passwordStrength]}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Confirm Password Field */}
-                <div className="group">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Confirm Password
-                  </label>
-                  <div className="relative">
-                    <Lock
-                      className={`absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 transition-colors ${focusedField === "confirmPassword" ? "text-blue-500" : "text-gray-400 dark:text-gray-600"}`}
-                    />
-                    <input
-                      type={showConfirmPassword ? "text" : "password"}
-                      value={formData.confirmPassword}
-                      onChange={(e) =>
-                        handleChange("confirmPassword", e.target.value)
-                      }
-                      onFocus={() => setFocusedField("confirmPassword")}
-                      onBlur={() => setFocusedField(null)}
-                      className="w-full pl-12 pr-12 py-3 bg-white/50 dark:bg-black/30 border-2 border-gray-200 dark:border-white/10 rounded-2xl text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-500/20 transition-all"
-                      placeholder="••••••••"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowConfirmPassword(!showConfirmPassword)
-                      }
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-blue-400 transition-colors"
-                    >
-                      {showConfirmPassword ? (
-                        <EyeOff className="w-5 h-5" />
-                      ) : (
-                        <Eye className="w-5 h-5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Error message */}
-                {error && (
-                  <p className="text-sm text-red-500 dark:text-red-400">
-                    {error}
-                  </p>
-                )}
-
-                {/* Submit Button */}
-                <button
-                  type="submit"
+              <div>
+                <AuthInput
+                  id="register-password"
+                  label="Password"
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => handleChange("password", e.target.value)}
+                  autoComplete="new-password"
                   disabled={loading}
-                  className="relative w-full group overflow-hidden mt-6"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 rounded-2xl blur-lg opacity-75 group-hover:opacity-100 transition-opacity" />
-                  <div
-                    className={`relative py-4 px-6 rounded-2xl font-semibold text-white bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 transition-all ${loading ? "opacity-50" : "group-hover:scale-[1.02] active:scale-[0.98]"}`}
-                  >
-                    {loading ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        <span>Creating account...</span>
-                      </div>
-                    ) : (
-                      <span className="flex items-center justify-center gap-2">
-                        Create Account
-                        <ArrowRight className="w-5 h-5" />
-                      </span>
-                    )}
+                />
+                {formData.password && (
+                  <div className="mt-2 px-0.5">
+                    <div className="flex gap-1 mb-1">
+                      {[1, 2, 3, 4].map((i) => (
+                        <div
+                          key={i}
+                          className={`h-1 flex-1 rounded-full transition-all ${
+                            i <= passwordStrength
+                              ? strengthColors[passwordStrength]
+                              : "bg-gray-200 dark:bg-na-border"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-gray-400 dark:text-slate-500">
+                      Strength: {strengthLabels[passwordStrength]}
+                    </p>
                   </div>
+                )}
+              </div>
+
+              <AuthInput
+                id="register-confirm-password"
+                label="Confirm Password"
+                type="password"
+                value={formData.confirmPassword}
+                onChange={(e) =>
+                  handleChange("confirmPassword", e.target.value)
+                }
+                autoComplete="new-password"
+                disabled={loading}
+              />
+
+              {error && (
+                <p className="flex items-center gap-1.5 text-xs text-red-500 dark:text-red-400">
+                  <AlertCircle size={13} className="shrink-0" />
+                  {error}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2
+                  bg-gradient-to-r from-blue-600 to-blue-700
+                  hover:from-blue-700 hover:to-blue-800
+                  disabled:opacity-60 disabled:cursor-not-allowed
+                  active:scale-[.98] text-white py-3 rounded-xl font-semibold text-sm
+                  transition-all shadow-sm hover:shadow-md"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />
+                    Creating account…
+                  </>
+                ) : (
+                  <>
+                    Create Account
+                    <ArrowRight size={15} />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="text-center pt-4 mt-4 border-t border-gray-100 dark:border-na-border">
+              <p className="text-sm text-gray-500 dark:text-slate-400">
+                Already have an account?{" "}
+                <button
+                  type="button"
+                  onClick={() => navigate("/login")}
+                  className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+                >
+                  Sign in
                 </button>
-
-                {/* Sign In Link */}
-                <div className="text-center pt-4 border-t border-gray-200 dark:border-white/10 mt-6">
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
-                    Already have an account?{" "}
-                    <button
-                      type="button"
-                      onClick={() => navigate("/login")}
-                      className="font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
-                    >
-                      Sign in
-                    </button>
-                  </p>
-                </div>
-              </form>
+              </p>
             </div>
-          </motion.div>
+          </div>
 
-          {/* Security Badge */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 1.2 }}
-            className="mt-6 text-center"
-          >
-            <div className="inline-flex items-center gap-2 px-4 py-2 backdrop-blur-xl bg-white/10 dark:bg-black/20 border border-white/20 rounded-full text-xs text-gray-700 dark:text-gray-300">
-              <Shield className="w-4 h-4 text-green-400" />
-              <span>256-bit encryption • Your data is secure</span>
-            </div>
-          </motion.div>
+          <p className="mt-5 flex items-center justify-center gap-1.5 text-center text-[11px] text-gray-400 dark:text-slate-500">
+            <Shield size={12} />
+            256-bit encryption • Your data is secure
+          </p>
         </motion.div>
       </div>
     </div>
