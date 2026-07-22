@@ -14,6 +14,7 @@
  * localStorage keys, so an admin session and a regular user session can
  * coexist in the same browser without colliding or overwriting each other.
  */
+import { getSettings, applySettingsPatch } from "../data/adminSettingsMock";
 
 import {
   MOCK_ADMIN_INCIDENTS,
@@ -399,6 +400,93 @@ export const adminAnalyticsAPI = {
     };
   },
 };
+
+// ─── Admin Settings API ────────────────────────────────────────────────────
+// Phase 7 (Settings). Same conventions as every other admin endpoint above:
+// simulated network delay + { data } envelope. Notification preferences
+// live in adminSettingsMock.js as a plain mutable store; "change password"
+// reuses the existing MOCK_ADMIN_CREDENTIALS/MOCK_ADMIN already defined at
+// the top of this file rather than inventing a second admin identity.
+export const adminSettingsAPI = {
+  /**
+   * GET /api/admin/settings
+   * PRODUCTION:
+   *   getAdminSettings: () => http.get("/admin/settings"),
+   */
+  getAdminSettings: async () => {
+    await delay(300);
+    return { data: { settings: getSettings(), admin: MOCK_ADMIN } };
+  },
+
+  /**
+   * PATCH /api/admin/settings
+   * PRODUCTION:
+   *   updateAdminSettings: (patch) => http.patch("/admin/settings", patch),
+   */
+  updateAdminSettings: async (patch) => {
+    await delay(350);
+    return { data: { settings: applySettingsPatch(patch) } };
+  },
+
+  /**
+   * POST /api/admin/settings/change-password
+   * Mock-validates the current password against MOCK_ADMIN_CREDENTIALS and,
+   * if correct, updates it in place for the rest of the session.
+   *
+   * PRODUCTION:
+   *   changePassword: (currentPassword, newPassword) =>
+   *     http.post("/admin/settings/change-password", { currentPassword, newPassword }),
+   */
+  changePassword: async (currentPassword, newPassword) => {
+    await delay(450);
+    if (currentPassword !== MOCK_ADMIN_CREDENTIALS.password) {
+      const err = new Error("Current password is incorrect.");
+      err.code = "INVALID_CURRENT_PASSWORD";
+      throw err;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      const err = new Error("New password must be at least 6 characters.");
+      err.code = "INVALID_NEW_PASSWORD";
+      throw err;
+    }
+    MOCK_ADMIN_CREDENTIALS.password = newPassword;
+    return { data: { success: true } };
+  },
+};
+
+// ─── Admin Settings ────────────────────────────────────────────────────────────
+// Phase 7 (Admin Settings). No backend yet, so preferences persist to
+// localStorage under their own key (separate from the admin session and
+// theme keys) — the same lightweight persistence approach
+// ThemeContext.jsx already uses for dark/light mode. Swapping in a real
+// backend later only means changing the two function bodies below.
+const ADMIN_SETTINGS_KEY = "na-admin-settings";
+
+const DEFAULT_ADMIN_SETTINGS = {
+  notifyNewIncident: true,
+  notifyStatusChange: false,
+  weeklySummary: true,
+};
+
+function readStoredSettings() {
+  try {
+    const raw = localStorage.getItem(ADMIN_SETTINGS_KEY);
+    return raw
+      ? { ...DEFAULT_ADMIN_SETTINGS, ...JSON.parse(raw) }
+      : { ...DEFAULT_ADMIN_SETTINGS };
+  } catch (_) {
+    return { ...DEFAULT_ADMIN_SETTINGS };
+  }
+}
+
+function writeStoredSettings(settings) {
+  try {
+    localStorage.setItem(ADMIN_SETTINGS_KEY, JSON.stringify(settings));
+  } catch (_) {
+    // Ignore write failures (e.g. private-browsing storage limits) —
+    // preferences just won't persist across reloads in that case.
+  }
+}
 
 export const adminAuthHelpers = {
   login: (token, admin) => {
